@@ -1,0 +1,33 @@
+{
+  "name": "moe-registration-portal-poc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MoE School Registration Portal - Proof of Concept (local prototype with synthetic data)",
+  "type": "module",
+  "scripts": {
+    "seed": "node --no-warnings server/seed/seed.js",
+    "server": "node --no-warnings --watch-path=server server/index.js",
+    "client": "vite --config client/vite.config.js",
+    "dev": "concurrently -n api,web -c yellow,cyan \"npm:server\" \"npm:client\"",
+    "build": "vite build --config client/vite.config.js",
+    "start": "node --no-warnings server/index.js",
+    "setup": "npm install && npm run seed && npm run build"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^5.3.0",
+    "multer": "^2.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^10.0.6",
+    "leaflet": "1.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.6",
+    "vite": "^6.4.5"
+  }
+}
