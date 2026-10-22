@@ -65,7 +65,7 @@ export default function DataModel() {
         It runs on SQLite for the PoC and is written to move to PostgreSQL + PostGIS. Row counts below are from the starting synthetic data.
       </p>
 
-      <h3 className="mt">Entity relationships</h3>
+      <h3 className="mt" id="dm-diagram">Entity relationships</h3>
       <p className="small muted">Arrows point from the table holding the foreign key to the table it references (many → one). Colours group the tables by area. For readability the diagram leaves out applications → families (also reachable through the child) and documents → guardians.</p>
       <Diagram />
       <div className="row small mt">
@@ -74,7 +74,7 @@ export default function DataModel() {
         ))}
       </div>
 
-      <h3 className="mt">Tables</h3>
+      <h3 className="mt" id="dm-tables">Tables</h3>
       {ENTITY_GROUPS.map((g) => (
         <div key={g.group} className="mb">
           <h4 style={{ marginTop: 14 }}>{g.group}</h4>
@@ -90,20 +90,20 @@ export default function DataModel() {
         </div>
       ))}
 
-      <h3 className="mt">Status values</h3>
+      <h3 className="mt" id="dm-states">Status values</h3>
       <div className="table-wrap"><table className="table">
         <thead><tr><th style={{ width: 190 }}>Column</th><th>Values and flow</th><th>Requirements</th></tr></thead>
         <tbody>{STATES.map(([c, v, r]) => <tr key={c}><td className="mono small"><b>{c}</b></td><td className="small">{v}</td><td className="small">{r}</td></tr>)}</tbody>
       </table></div>
 
-      <h3 className="mt">Design decisions</h3>
+      <h3 className="mt" id="dm-decisions">Design decisions</h3>
       <div className="grid c2">
         {DECISIONS.map(([h, d]) => (
           <div key={h} className="card" style={{ padding: 14, background: 'var(--gold-50)' }}><b>{h}</b><p className="small" style={{ margin: '6px 0 0' }}>{d}</p></div>
         ))}
       </div>
 
-      <h3 className="mt">PoC choice vs target (PostgreSQL + PostGIS phase)</h3>
+      <h3 className="mt" id="dm-target">PoC choice vs target (PostgreSQL + PostGIS phase)</h3>
       <div className="table-wrap"><table className="table">
         <thead><tr><th style={{ width: 130 }}>Aspect</th><th>PoC</th><th>Target</th></tr></thead>
         <tbody>{TARGET.map(([a, p, t]) => <tr key={a}><td><b>{a}</b></td><td className="small">{p}</td><td className="small">{t}</td></tr>)}</tbody>

@@ -245,3 +245,21 @@ table.table { width: 100%; border-collapse: collapse; font-size: .88rem; }
   main.content { padding: 0; }
   body { background: #fff; }
 }
+
+/* ---------- documentation page: grouped section menu ---------- */
+.docs-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 20px; align-items: start; }
+.docs-layout .docs-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.docs-layout [id] { scroll-margin-top: 90px; }
+.docs-toc { position: sticky; top: 90px; max-height: calc(100vh - 110px); overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 8px; font-size: .86rem; }
+.docs-toc .toc-title { font-family: var(--font-head); font-weight: 600; padding: 2px 10px 8px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.docs-toc .toc-group { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 10px 4px; }
+.docs-toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--text); border-inline-start: 2px solid transparent; }
+.docs-toc a:hover { background: var(--gold-50); text-decoration: none; }
+.docs-toc a.active { background: var(--gold-100); color: var(--gold-800); font-weight: 600; border-inline-start-color: var(--gold-600); }
+.docs-toc a.sub { padding: 3px 10px 3px 24px; font-size: .8rem; color: var(--black-600); }
+.docs-toc a.sub.active { background: transparent; color: var(--gold-800); border-inline-start-color: var(--gold-400); }
+@media (max-width: 1100px) {
+  .docs-layout { grid-template-columns: minmax(0, 1fr); }
+  .docs-toc { position: static; max-height: none; }
+  .docs-toc .toc-subs { display: none; }
+}

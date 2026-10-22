@@ -13,11 +13,46 @@ const STATUS = {
 };
 const Status = ({ s }) => <span className={`badge ${STATUS[s][1]}`}>{STATUS[s][0]}</span>;
 
+// Left menu: related sections grouped; children are sub-sections of a section
 const TOC = [
-  ['overview', 'Overview'], ['run', 'Running the PoC'], ['architecture', 'Architecture'], ['data-model', 'Data model'], ['personas', 'Personas & test identities'],
-  ['data', 'Synthetic data'], ['scenarios', 'Acceptance scenarios A1–A16'], ['requirements', 'Requirements traceability'],
-  ['gaps', 'Flags: not / partially implemented'], ['mocks', 'Mock services (D4)'], ['next', 'Next phase: real backend'],
+  ['Getting started', [['overview', 'Overview'], ['run', 'Running the PoC'], ['personas', 'Personas & test identities']]],
+  ['Solution design', [
+    ['architecture', 'Architecture'],
+    ['data-model', 'Data model', [['dm-diagram', 'Entity relationships'], ['dm-tables', 'Tables'], ['dm-states', 'Status values'], ['dm-decisions', 'Design decisions'], ['dm-target', 'PoC vs target']]],
+    ['mocks', 'Mock services (D4)'],
+  ]],
+  ['Requirements coverage', [
+    ['scenarios', 'Acceptance scenarios A1–A16'],
+    ['requirements', 'Requirements traceability', REQUIREMENTS.map((r, i) => [`req-${i}`, r.section])],
+    ['data', 'Synthetic test data'],
+  ]],
+  ['Gaps & roadmap', [['gaps', 'Flags: not / partially implemented'], ['next', 'Next phase: real backend']]],
 ];
+const ALL_IDS = TOC.flatMap(([, items]) => items.flatMap(([id, , subs]) => [id, ...(subs || []).map(([sid]) => sid)]));
+
+function DocsMenu({ active, onGo }) {
+  const parentOf = (id) => TOC.flatMap(([, items]) => items).find(([pid, , subs]) => pid === id || (subs || []).some(([sid]) => sid === id))?.[0];
+  return (
+    <nav className="docs-toc" aria-label="Documentation sections">
+      <div className="toc-title">Contents</div>
+      {TOC.map(([group, items]) => (
+        <div key={group}>
+          <div className="toc-group">{group}</div>
+          {items.map(([id, label, subs]) => (
+            <div key={id}>
+              <a href={`#${id}`} className={parentOf(active) === id ? 'active' : ''} onClick={(e) => onGo(e, id)}>{label}</a>
+              {subs && parentOf(active) === id && (
+                <div className="toc-subs">
+                  {subs.map(([sid, sl]) => <a key={sid} href={`#${sid}`} className={`sub ${active === sid ? 'active' : ''}`} onClick={(e) => onGo(e, sid)}>{sl}</a>)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </nav>
+  );
+}
 
 export default function Docs() {
   const { lang } = useI18n();
@@ -28,12 +63,39 @@ export default function Docs() {
   useEffect(() => {
     if (!loc.hash) return;
     const el = document.getElementById(decodeURIComponent(loc.hash.slice(1)));
-    if (el) {
+    if (!el) return;
+    if (el.tagName === 'TR') {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.style.background = 'var(--gold-100)';
       setTimeout(() => (el.style.background = ''), 2500);
-    }
+    } else el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [loc.hash]);
+
+  // highlight the section currently at the top of the viewport
+  const [active, setActive] = useState('overview');
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        // the anchor closest above the line just under the sticky header wins
+        let cur = ALL_IDS[0], best = -Infinity;
+        for (const id of ALL_IDS) {
+          const top = document.getElementById(id)?.getBoundingClientRect().top;
+          if (top !== undefined && top <= 130 && top > best) { best = top; cur = id; }
+        }
+        setActive(cur);
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); };
+  }, []);
+  const go = (e, id) => {
+    e.preventDefault();
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    history.replaceState(null, '', `#${id}`);
+  };
 
   const counts = useMemo(() => {
     const c = { done: 0, partial: 0, sim: 0, gap: 0 };
@@ -43,9 +105,11 @@ export default function Docs() {
   const match = (i) => (!onlyFlags || i[4] !== 'done') && (!q || i.join(' ').toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <div dir="ltr" lang="en" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 16 }}>
-      {lang === 'ar' && <div className="alert info" dir="rtl">صفحة التوثيق الفنية متاحة باللغة الإنجليزية فقط في هذا النموذج.</div>}
-
+    <div dir="ltr" lang="en">
+      {lang === 'ar' && <div className="alert info mb" dir="rtl">صفحة التوثيق الفنية متاحة باللغة الإنجليزية فقط في هذا النموذج.</div>}
+      <div className="docs-layout">
+        <DocsMenu active={active} onGo={go} />
+        <div className="docs-main">
       <section id="overview" className="card" style={{ borderTop: '4px solid var(--gold-500)' }}>
         <h1>MoE School Registration Portal – PoC documentation</h1>
         <p>
@@ -59,7 +123,6 @@ export default function Docs() {
           <div className="stat"><div className="label">Partial – flagged</div><div className="value">{counts.partial}</div></div>
           <div className="stat"><div className="label">Not in PoC</div><div className="value">{counts.gap}</div></div>
         </div>
-        <nav className="row mt small">{TOC.map(([id, l]) => <a key={id} href={`#${id}`} className="badge gold">{l}</a>)}</nav>
       </section>
 
       <section id="run" className="card">
@@ -71,6 +134,15 @@ npm run seed         # reset the database to the starting synthetic data
 node tests/scenarios.mjs   # run acceptance scenarios A1–A16 against the API (BASE=http://localhost:3000)`}</pre>
         <p className="small muted">Requires Node.js 22.13+ (uses the built-in SQLite driver). Map tiles load from OpenStreetMap, so the browser needs internet access; everything else is local.</p>
         <p className="small">Demo controls (Ministry Administrator → Demo controls) move the demo clock forward to show service-level breaches, offer lapses and leaving-date seat releases, and run the scheduled jobs on demand.</p>
+      </section>
+
+      <section id="personas" className="card">
+        <h2>Personas &amp; test identities</h2>
+        <p className="small">Parents sign in through the simulated UAE PASS screen (pick the identity or type the Emirates ID). Staff pick a persona on the home page.</p>
+        <div className="table-wrap"><table className="table">
+          <thead><tr><th>Persona</th><th>Role</th><th>Sign-in</th><th>Scenarios</th></tr></thead>
+          <tbody>{PERSONAS.map((p) => <tr key={p.who}><td><b>{p.who}</b></td><td>{p.role}</td><td className="mono small">{p.how}</td><td>{p.use}</td></tr>)}</tbody>
+        </table></div>
       </section>
 
       <section id="architecture" className="card">
@@ -90,20 +162,12 @@ node tests/scenarios.mjs   # run acceptance scenarios A1–A16 against the API (
 
       <DataModel />
 
-      <section id="personas" className="card">
-        <h2>Personas &amp; test identities</h2>
-        <p className="small">Parents sign in through the simulated UAE PASS screen (pick the identity or type the Emirates ID). Staff pick a persona on the home page.</p>
+      <section id="mocks" className="card">
+        <h2>Mock services and their interfaces (Section 8 / D4)</h2>
+        <p className="small">Implemented in <code>server/mocks/index.js</code>. Each function has the shape the real adapter will implement, so the mocks can be replaced one by one. Generated emails and SMS are visible under <Link to="/mock/outbox">Mock email &amp; SMS</Link>.</p>
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>Persona</th><th>Role</th><th>Sign-in</th><th>Scenarios</th></tr></thead>
-          <tbody>{PERSONAS.map((p) => <tr key={p.who}><td><b>{p.who}</b></td><td>{p.role}</td><td className="mono small">{p.how}</td><td>{p.use}</td></tr>)}</tbody>
-        </table></div>
-      </section>
-
-      <section id="data" className="card">
-        <h2>Synthetic data (Section 7)</h2>
-        <div className="table-wrap"><table className="table">
-          <thead><tr><th>Item</th><th>What the PoC contains</th><th>Status</th></tr></thead>
-          <tbody>{DATA.map(([a, b, s]) => <tr key={a}><td><b>{a}</b></td><td>{b}</td><td><Status s={s} /></td></tr>)}</tbody>
+          <thead><tr><th>System</th><th>Interface</th><th>HTTP facade</th></tr></thead>
+          <tbody>{MOCKS.map(([a, b, c]) => <tr key={a}><td><b>{a}</b></td><td className="mono small">{b}</td><td className="mono small">{c}</td></tr>)}</tbody>
         </table></div>
       </section>
 
@@ -126,11 +190,11 @@ node tests/scenarios.mjs   # run acceptance scenarios A1–A16 against the API (
             <label className="check small"><input type="checkbox" checked={onlyFlags} onChange={(e) => setOnlyFlags(e.target.checked)} /> Only flagged items</label>
           </div>
         </div>
-        {REQUIREMENTS.map((sec) => {
+        {REQUIREMENTS.map((sec, i) => {
           const items = sec.items.filter(match);
           if (!items.length) return null;
           return (
-            <div key={sec.section} className="mb">
+            <div key={sec.section} id={`req-${i}`} className="mb">
               <h3 style={{ marginTop: 14 }}>{sec.section}</h3>
               <div className="table-wrap"><table className="table">
                 <thead><tr><th style={{ width: 70 }}>ID</th><th style={{ width: '24%' }}>Requirement</th><th>How it is implemented</th><th style={{ width: '18%' }}>Where</th><th>Status</th></tr></thead>
@@ -147,20 +211,19 @@ node tests/scenarios.mjs   # run acceptance scenarios A1–A16 against the API (
         })}
       </section>
 
+      <section id="data" className="card">
+        <h2>Synthetic data (Section 7)</h2>
+        <div className="table-wrap"><table className="table">
+          <thead><tr><th>Item</th><th>What the PoC contains</th><th>Status</th></tr></thead>
+          <tbody>{DATA.map(([a, b, s]) => <tr key={a}><td><b>{a}</b></td><td>{b}</td><td><Status s={s} /></td></tr>)}</tbody>
+        </table></div>
+      </section>
+
       <section id="gaps" className="card" style={{ borderTop: '4px solid var(--amber-500)' }}>
         <h2>Flags: requirements not, or only partially, implemented in the PoC</h2>
         <div className="table-wrap"><table className="table">
           <thead><tr><th>Item</th><th>State</th><th>Explanation / plan</th></tr></thead>
           <tbody>{GAPS.map(([a, b, c]) => <tr key={a}><td><b>{a}</b></td><td><span className={`badge ${b === 'Out of scope' ? '' : b === 'Simulated' ? 'blue' : 'amber'}`}>{b}</span></td><td className="small">{c}</td></tr>)}</tbody>
-        </table></div>
-      </section>
-
-      <section id="mocks" className="card">
-        <h2>Mock services and their interfaces (Section 8 / D4)</h2>
-        <p className="small">Implemented in <code>server/mocks/index.js</code>. Each function has the shape the real adapter will implement, so the mocks can be replaced one by one. Generated emails and SMS are visible under <Link to="/mock/outbox">Mock email &amp; SMS</Link>.</p>
-        <div className="table-wrap"><table className="table">
-          <thead><tr><th>System</th><th>Interface</th><th>HTTP facade</th></tr></thead>
-          <tbody>{MOCKS.map(([a, b, c]) => <tr key={a}><td><b>{a}</b></td><td className="mono small">{b}</td><td className="mono small">{c}</td></tr>)}</tbody>
         </table></div>
       </section>
 
@@ -175,6 +238,9 @@ node tests/scenarios.mjs   # run acceptance scenarios A1–A16 against the API (
           <li><b>Hosting</b> – containerised API + web, environments for the acceptance session, observability and audit retention.</li>
         </ol>
       </section>
+
+        </div>
+      </div>
     </div>
   );
 }
