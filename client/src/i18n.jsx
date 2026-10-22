@@ -16,8 +16,9 @@ export function I18nProvider({ children }) {
   }, [dicts]);
 
   useEffect(() => {
-    load(lang);
-    if (lang !== 'en') load('en');
+    // both languages are preloaded so switching never unmounts the page (forms keep their state)
+    load('en');
+    load('ar');
     localStorage.setItem('moe_lang', lang);
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
@@ -38,7 +39,7 @@ export function I18nProvider({ children }) {
   const fmtDateTime = (d) => (d ? new Date(d).toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
   const fmtNum = (n, digits = 0) => (n === null || n === undefined || n === '' ? '—' : Number(n).toLocaleString(locale, { maximumFractionDigits: digits }));
   // label for a coded value from a list ('doc_type', code) or from i18n ('status.' + code)
-  const ready = !!dicts[lang];
+  const ready = !!dicts.en && !!dicts.ar;
 
   return (
     <Ctx.Provider value={{ lang, setLang, t, L, fmtDate, fmtDateTime, fmtNum, ready, dir: lang === 'ar' ? 'rtl' : 'ltr', reload: () => load(lang, true) }}>

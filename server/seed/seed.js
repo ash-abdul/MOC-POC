@@ -116,6 +116,7 @@ function nearestStop(lat, lng, schoolId) {
   return best && best.d <= 2.5 ? best : null;
 }
 const routeLoad = new Map(routes.map((r) => [r.id, 0]));
+const waitCount = {};
 
 /* ---------- staff users & personas ---------- */
 const user = (o) => insert('users', { lang: 'en', created_at: iso(NOW), ...o });
@@ -275,7 +276,7 @@ function createApp({ child, familyId = null, ay, grade, pathway, status, submitt
       const load = routeLoad.get(a.bus_route_id);
       const route = routes.find((r) => r.id === a.bus_route_id);
       // keep spare seats on every route except R4 (the full route in section 7)
-      if (route.code !== 'R4' && load >= Math.floor(route.cap * 0.75)) {
+      if ((route.code !== 'R4' && load >= Math.floor(route.cap * 0.75)) || (route.code === 'R4' && load >= route.cap && (waitCount.R4 = (waitCount.R4 || 0) + 1) > 6)) {
         update('applications', id, { transport_mode: 'dropoff', bus_route_id: null, bus_stop_id: null });
         a.bus_route_id = null;
       }
@@ -351,7 +352,7 @@ function volumeApp({ ay, submittedFrom, submittedTo, statusMix }) {
 }
 
 // previous cycle (AY 2026-27 admissions, submitted Sep 2025 – May 2026): all decided
-for (let i = 0; i < 2550; i++) volumeApp({ ay: AY_CUR, submittedFrom: '2025-09-15', submittedTo: '2026-05-31', statusMix: [['accepted', 66], ['rejected', 9], ['withdrawn', 9], ['lapsed', 6], ['offer_made', 0], ['closed', 0]] });
+for (let i = 0; i < 2900; i++) volumeApp({ ay: AY_CUR, submittedFrom: '2025-09-15', submittedTo: chance(0.62) ? '2025-10-31' : '2026-05-31', statusMix: [['accepted', 66], ['rejected', 9], ['withdrawn', 9], ['lapsed', 6], ['offer_made', 0], ['closed', 0]] });
 // previous-year renewals (history for IR-02)
 for (let i = 0; i < 260; i++) {
   const e = pick(enrolCurrent);
@@ -361,7 +362,7 @@ for (let i = 0; i < 260; i++) {
 }
 // current cycle (AY 2027-28, new-registration window opened 15 Sep 2026)
 const curFrom = '2026-09-15', curTo = iso(new Date(NOW.getTime() - 3600000));
-for (let i = 0; i < 1900; i++) volumeApp({ ay: AY_ADM, submittedFrom: curFrom, submittedTo: curTo, statusMix: [['submitted', 14], ['under_review', 18], ['info_requested', 5], ['passed', 3], ['escalated', 3], ['offer_made', 13], ['accepted', 30], ['rejected', 6], ['withdrawn', 5], ['lapsed', 3]] });
+for (let i = 0; i < 1500; i++) volumeApp({ ay: AY_ADM, submittedFrom: curFrom, submittedTo: curTo, statusMix: [['submitted', 14], ['under_review', 18], ['info_requested', 5], ['passed', 3], ['escalated', 3], ['offer_made', 13], ['accepted', 30], ['rejected', 6], ['withdrawn', 5], ['lapsed', 3]] });
 // current-cycle renewals already confirmed (renewal window opened 1 Oct 2026)
 const renewNow = enrolCurrent.filter((e) => pendingByChild.has(e.childId)).sort(() => rnd() - 0.5).slice(0, 260);
 for (const e of renewNow) {

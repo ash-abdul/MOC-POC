@@ -16,6 +16,7 @@
  "col.available_seats": "Available seats",
  "col.avg_decision_days": "Average decision time (days)",
  "col.ay": "Academic year",
+ "col.bus_held": "Seats held (pending decision)",
  "col.capacity": "Capacity",
  "col.change": "Change",
  "col.change_pct": "Change %",

@@ -141,11 +141,12 @@ export const REPORTS = {
     if (f.ay) { w.push('ca.ay = ?'); p.push(f.ay); }
     if (f.school) { w.push('ca.school_id = ?'); p.push(f.school); }
     if (f.cluster) { w.push('s.cluster_id = ?'); p.push(f.cluster); }
+    if (f.emirate) { w.push('cl.emirate = ?'); p.push(f.emirate); }
     const g = gradesFilter(f);
     if (g) { w.push(`ca.grade IN (${g.map(() => '?').join(',')})`); p.push(...g); }
     if (f.by !== 'all') w.push('ca.cleared_at IS NULL');
     const rows = all(`SELECT s.name_en school, s.name_ar school_ar, ca.ay, COALESCE(ca.grade, 'ALL') grade, ca.level, ca.utilisation, ca.reached_at, ca.cleared_at
-                        FROM capacity_alerts ca JOIN schools s ON s.id = ca.school_id WHERE ${w.join(' AND ')} ORDER BY ca.level DESC, ca.reached_at DESC`, ...p);
+                        FROM capacity_alerts ca JOIN schools s ON s.id = ca.school_id JOIN clusters cl ON cl.id = s.cluster_id WHERE ${w.join(' AND ')} ORDER BY ca.level DESC, ca.reached_at DESC`, ...p);
     return { columns: ['school', 'ay', 'grade', 'level', 'utilisation', 'reached_at', 'cleared_at'], rows };
   },
   /* IR-06 Catchment demand & unmet demand */
@@ -193,10 +194,13 @@ export const REPORTS = {
   /* IR-08 Net enrolment change */
   'IR-08'(f) {
     const by = ['school', 'cycle', 'grade'].includes(f.by) ? f.by : 'school';
-    const ap = appWhere({ ...f, ay: null }, { dateCol: 'a.decided_at' });
+    const ap = appWhere(f, { dateCol: 'a.decided_at' });
     const accepted = all(`SELECT a.type, a.pathway, a.grade, s.name_en school, s.name_ar school_ar ${APP_FROM} WHERE ${ap.sql} AND a.status = 'accepted' AND a.type IN ('new','transfer')`, ...ap.p);
     const en = enrWhere(f);
-    const left = all(`SELECT e.leave_reason, e.grade, s.name_en school, s.name_ar school_ar ${ENR_FROM} WHERE ${en.sql} AND e.status IN ('left','leaving') AND e.leave_reason != 'graduated'`, ...en.p);
+    // A leaver's seat held for next year is released with the same reason – that record is not a second leaver,
+    // so network leavers are counted on the year they actually left; transfers out are recorded on the admission year.
+    const left = all(`SELECT e.leave_reason, e.grade, s.name_en school, s.name_ar school_ar ${ENR_FROM} WHERE ${en.sql} AND e.status IN ('left','leaving') AND e.leave_reason != 'graduated'
+                        AND (e.leave_reason = 'transfer_out' OR e.ay != ?)`, ...en.p, admissionAY().code);
     const k = (r) => (by === 'cycle' ? cycleOf(r.grade) : r[by]);
     const m = new Map();
     const row = (r) => {
@@ -236,12 +240,13 @@ export const REPORTS = {
   /* IR-10 Transport demand */
   'IR-10'(f) {
     const ay = f.ay || admissionAY().code;
-    const routes = all('SELECT * FROM transport_routes ORDER BY code').filter((r) => !f.school || parse(r.school_ids, []).includes(f.school));
+    const inScope = new Set(schoolsInScope(f).map((s) => s.id));
+    const routes = all('SELECT * FROM transport_routes ORDER BY code').filter((r) => parse(r.school_ids, []).some((id) => inScope.has(id)));
     const rows = routes.map((r) => {
       const l = transport.routeLoad(r.id, ay);
-      return { route: `${r.code} – ${r.name_en}`, route_ar: `${r.code} – ${r.name_ar}`, capacity: r.capacity, requests: l.held + l.confirmed + l.waitlisted, confirmed: l.confirmed, held: l.held, waitlisted: l.waitlisted, utilisation: pct(l.held + l.confirmed, r.capacity) };
+      return { route: `${r.code} – ${r.name_en}`, route_ar: `${r.code} – ${r.name_ar}`, capacity: r.capacity, requests: l.held + l.confirmed + l.waitlisted, confirmed: l.confirmed, bus_held: l.held, waitlisted: l.waitlisted, utilisation: pct(l.held + l.confirmed, r.capacity) };
     });
-    return { columns: ['route', 'capacity', 'requests', 'confirmed', 'held', 'waitlisted', 'utilisation'], rows, totals: sumRows(rows, ['capacity', 'requests', 'confirmed', 'held', 'waitlisted']), meta: { ay }, chart: { type: 'bar', x: 'route', series: ['requests', 'capacity'] } };
+    return { columns: ['route', 'capacity', 'requests', 'confirmed', 'bus_held', 'waitlisted', 'utilisation'], rows, totals: sumRows(rows, ['capacity', 'requests', 'confirmed', 'bus_held', 'waitlisted']), meta: { ay }, chart: { type: 'bar', x: 'route', series: ['requests', 'capacity'] } };
   },
 };
 

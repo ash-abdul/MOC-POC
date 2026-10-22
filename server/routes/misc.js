@@ -24,7 +24,10 @@ reports.get('/:id/export', wrap(async (req, res) => {
   if (!fn) throw new AppError(404, 'unknown_report');
   const f = normFilters(req.query, req.user);
   const out = fn(f);
-  const flt = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join('  ');
+  // filter summary in the export language (A15: no untranslated text)
+  const d = dict(req.query.lang === 'ar' ? 'ar' : 'en');
+  const shown = Object.entries(f).filter(([k, v]) => v && (k !== 'period' || req.params.id === 'IR-01'));
+  const flt = shown.map(([k, v]) => `${d[`ins.f.${k}`] || k}: ${d[`grade.${v}`] || d[`cycle.${v}`] || d[`ins.by.${v}`] || d[`ins.period.${v}`] || v}`).join(' · ');
   audit(req.user, 'report.exported', 'report', req.params.id, null, f);
   await exportXlsx(res, { name: req.params.id, lang: req.query.lang, columns: out.columns, rows: out.rows, totals: out.totals, titleKey: `report.${req.params.id}`, subtitle: `${req.params.id}  ${flt}  ·  ${nowIso().slice(0, 16)}` });
 }));

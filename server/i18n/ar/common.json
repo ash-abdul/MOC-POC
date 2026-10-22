@@ -16,6 +16,7 @@
  "col.available_seats": "المقاعد المتاحة",
  "col.avg_decision_days": "متوسط زمن القرار (أيام)",
  "col.ay": "العام الدراسي",
+ "col.bus_held": "مقاعد محجوزة (بانتظار القرار)",
  "col.capacity": "السعة",
  "col.change": "التغير",
  "col.change_pct": "نسبة التغير %",
