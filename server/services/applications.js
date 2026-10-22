@@ -6,7 +6,7 @@ import {
 } from './core.js';
 import { gradeSeats, pickSection, sectionSeats, checkAlerts } from './capacity.js';
 import { maps, transport, sis } from '../mocks/index.js';
-import { notify, familyUsers, schoolStaff, clusterOfficers } from './notify.js';
+import { notify, familyUsers, schoolStaff, clusterOfficers, ministryAdmins } from './notify.js';
 
 export const ACTIVE = ['draft', 'submitted', 'under_review', 'info_requested', 'passed', 'escalated', 'offer_made'];
 export const OPEN = ACTIVE.filter((s) => s !== 'draft');
@@ -50,8 +50,29 @@ export function siblingSchools(familyId, childId) {
   ).map((r) => r.school_id);
 }
 
-export function eligibleSchools({ lat, lng, grade, ay = admissionAY().code, familyId, childId }) {
+/* BR-03: which schools are open to a home pin (before the grade filter).
+ *  catchment_and_grade – catchment contains the pin (starting value)
+ *  catchment_or_radius – catchment contains the pin, or the school is within radius_km of it
+ *  grade_in_cluster    – any school in the pilot cluster that offers the grade */
+export const ELIGIBILITY_MODES = ['catchment_and_grade', 'catchment_or_radius', 'grade_in_cluster'];
+export function eligibilityRule() {
+  const r = setting('eligible_schools_rule', 'catchment_and_grade');
+  const v = typeof r === 'string' ? { mode: r } : r || {};
+  return { mode: ELIGIBILITY_MODES.includes(v.mode) ? v.mode : 'catchment_and_grade', radius_km: Number(v.radius_km) > 0 ? Number(v.radius_km) : 3 };
+}
+export function eligibleArea(lat, lng) {
+  const rule = eligibilityRule();
   const inCatchment = new Set(maps.catchmentsContaining(lat, lng));
+  const schools = all('SELECT * FROM schools ORDER BY id');
+  const ids = new Set(schools.filter((s) =>
+    rule.mode === 'grade_in_cluster' ? true
+      : inCatchment.has(s.id) || (rule.mode === 'catchment_or_radius' && haversineKm({ lat, lng }, s) <= rule.radius_km)
+  ).map((s) => s.id));
+  return { ids, inCatchment, schools, rule };
+}
+
+export function eligibleSchools({ lat, lng, grade, ay = admissionAY().code, familyId, childId }) {
+  const { ids: inArea, inCatchment, schools, rule } = eligibleArea(lat, lng);
   const sibs = siblingSchools(familyId, childId);
   const describe = (s) => {
     const seats = gradeSeats(s.id, ay, grade);
@@ -67,19 +88,18 @@ export function eligibleSchools({ lat, lng, grade, ay = admissionAY().code, fami
       in_catchment: inCatchment.has(s.id),
     };
   };
-  const schools = all('SELECT * FROM schools ORDER BY id');
-  const eligible = schools.filter((s) => inCatchment.has(s.id)).map(describe).filter((s) => s.offers_grade).sort((a, b) => a.distance_km - b.distance_km);
+  const eligible = schools.filter((s) => inArea.has(s.id)).map(describe).filter((s) => s.offers_grade).sort((a, b) => a.distance_km - b.distance_km);
   const anySeat = eligible.some((s) => s.seat_status !== 'full');
   let alternatives = [];
   if (!anySeat) {
     // PP-11 / CC-04: nearest schools outside the catchment with a seat, marked "Cluster approval required"
-    alternatives = schools.filter((s) => !inCatchment.has(s.id)).map(describe)
+    alternatives = schools.filter((s) => !inArea.has(s.id)).map(describe)
       .filter((s) => s.offers_grade && s.seat_status !== 'full')
       .sort((a, b) => a.distance_km - b.distance_km)
       .slice(0, setting('out_of_catchment_suggestions', 3))
       .map((s) => ({ ...s, cluster_approval_required: true }));
   }
-  return { location: maps.reverseGeocode(lat, lng), eligible, alternatives, any_seat: anySeat, max_preferences: setting('max_preferences', 3) };
+  return { location: maps.reverseGeocode(lat, lng), eligible, alternatives, any_seat: anySeat, max_preferences: setting('max_preferences', 3), rule };
 }
 
 /* ---------------- Document checklist (PP-13, PP-14, section 6) ---------------- */
@@ -162,6 +182,44 @@ export const comparePriority = (a, b) => {
   return 0;
 };
 
+/* ---------------- Bus seat lifecycle (BR-09) ----------------
+ * hold_from:  submission | offer | acceptance   – when a seat is first held
+ * confirm_on: offer | acceptance                – when the held seat is confirmed
+ * release_on: decline, lapse, withdrawal, rejection, closure – which endings give the seat back */
+export const BUS_HOLD_FROM = ['submission', 'offer', 'acceptance'];
+export const BUS_CONFIRM_ON = ['offer', 'acceptance'];
+export const BUS_RELEASE_EVENTS = ['decline', 'lapse', 'withdrawal', 'rejection', 'closure'];
+export function busRule() {
+  const r = setting('bus_seat_hold', {}) || {};
+  return {
+    hold_from: BUS_HOLD_FROM.includes(r.hold_from) ? r.hold_from : 'submission',
+    confirm_on: BUS_CONFIRM_ON.includes(r.confirm_on) ? r.confirm_on : 'acceptance',
+    release_on: Array.isArray(r.release_on) ? r.release_on.filter((e) => BUS_RELEASE_EVENTS.includes(e)) : BUS_RELEASE_EVENTS,
+  };
+}
+// Apply the rule at a stage of the application; returns the seat when something changed.
+function busStage(app, stage, actor) {
+  if (app.transport_mode !== 'bus' || !app.bus_route_id) return null;
+  const r = busRule();
+  if (r.hold_from !== stage && r.confirm_on !== stage) return null;
+  const existing = get(`SELECT * FROM bus_seats WHERE application_id = ? AND status IN ('held','confirmed','waitlisted')`, app.id);
+  let seat = existing || transport.hold({ routeId: app.bus_route_id, stopId: app.bus_stop_id, childId: app.child_id, applicationId: app.id, ay: app.ay });
+  if (!existing) event(app, `bus_${seat.status}`, actor);
+  if (r.confirm_on === stage) {
+    seat = transport.confirm(app.id) || seat;
+    event(app, seat.status === 'confirmed' ? 'bus_confirmed' : 'bus_waitlisted', actor);
+    const child = get('SELECT * FROM children WHERE id = ?', app.child_id);
+    notify(seat.status === 'confirmed' ? 'bus_confirmed' : 'bus_waitlisted', familyUsers(app.family_id), { ref: app.ref, child: bi(child, 'full_name') }, { applicationId: app.id });
+  }
+  return seat;
+}
+function busRelease(app, ending) {
+  if (!busRule().release_on.includes(ending)) return null;
+  const seat = transport.release(app.id);
+  if (seat) event(app, 'bus_released', null);
+  return seat;
+}
+
 /* ---------------- Draft & submission (PP-16, PP-17, BR-11) ---------------- */
 export function assertOneActive(childId, ay, exceptId) {
   const max = setting('max_active_applications_per_child', 1);
@@ -201,11 +259,12 @@ export function submit(user, appId) {
     const t = nowIso();
     const ref = nextRef(fam?.emirate || setting('default_emirate', 'SHJ'), new Date(t).getUTCFullYear());
     const sibs = siblingSchools(app.family_id, app.child_id);
-    const inCatch = new Set(maps.catchmentsContaining(app.home_lat, app.home_lng));
-    const outOfCatchment = prefs.some((p) => !inCatch.has(p));
+    // a preference outside the BR-03 eligible area needs cluster approval
+    const inArea = eligibleArea(app.home_lat, app.home_lng).ids;
+    const outOfCatchment = prefs.some((p) => !inArea.has(p));
 
     let escalation = null;
-    if (app.exceptional) escalation = 'exceptional_transfer';
+    if (app.exceptional && exceptionalApprover() !== 'school') escalation = 'exceptional_transfer';
     else if (outOfCatchment) escalation = 'out_of_catchment';
     else if (app.residence_route && app.residence_route !== 'own') escalation = 'alternative_residence';
 
@@ -216,15 +275,14 @@ export function submit(user, appId) {
       sla_due_at: escalation ? null : addWorkingDays(t, setting('decision_sla_working_days', 2)),
     }, user, 'submitted', escalation ? `escalation:${escalation}` : null);
 
-    // BR-09: hold bus seat from submission
-    if (app.transport_mode === 'bus' && app.bus_route_id) {
-      const seat = transport.hold({ routeId: app.bus_route_id, stopId: app.bus_stop_id, childId: app.child_id, applicationId: app.id, ay: app.ay });
-      event(next, `bus_${seat.status}`, null);
-    }
+    busStage(next, 'submission', null); // BR-09
     const child = get('SELECT * FROM children WHERE id = ?', app.child_id);
     const vars = { ref, child: { en: child.full_name_en, ar: child.full_name_ar }, school: bi(school(prefs[0])) };
     notify('application_submitted', familyUsers(app.family_id), vars, { applicationId: app.id, channels: ['inapp', 'email', 'sms'] });
-    if (escalation) notify('escalated_to_cluster', clusterOfficers(prefs[0]), { ...vars, reason: escalation }, { applicationId: app.id });
+    if (escalation) {
+      const approvers = escalation === 'exceptional_transfer' && exceptionalApprover() === 'ministry_admin' ? ministryAdmins() : clusterOfficers(prefs[0]);
+      notify('escalated_to_cluster', approvers, { ...vars, reason: escalation }, { applicationId: app.id });
+    }
     else {
       notify('new_in_queue', schoolStaff(prefs[0]), vars, { applicationId: app.id });
       next = autoPassIfFull(next);
@@ -312,6 +370,7 @@ export function offer(user, appId, { sectionId, force = false, reason } = {}) {
     }
     const due = addWorkingDays(nowIso(), setting('offer_acceptance_working_days', 5));
     const next = change(app, { status: 'offer_made', offered_section_id: sec.id, offer_due_at: due, decided_at: nowIso(), ...firstDecision(app) }, user, force ? 'offer_made_forced' : 'offer_made', `${app.grade}-${sec.name}`, reason);
+    busStage(next, 'offer', null); // BR-09
     const s = school(app.current_school_id);
     const child = get('SELECT * FROM children WHERE id = ?', app.child_id);
     notify('offer_made', familyUsers(app.family_id), { ref: app.ref, child: bi(child, 'full_name'), school: bi(s), grade: app.grade, section: sec.name, due: due.slice(0, 10) }, { applicationId: app.id });
@@ -391,10 +450,11 @@ export function reject(user, appId, { reason, note }) {
   return tx(() => {
     const app = getApp(appId);
     if (['registrar', 'principal'].includes(user.role)) assertAtSchool(user, app);
+    if (['cluster_officer', 'ministry_admin'].includes(user.role)) assertCanDecide(user, app);
     if (!OPEN.includes(app.status) || app.status === 'offer_made') throw new AppError(409, 'bad_state');
     if (!reason) throw new AppError(400, 'reason_required');
     const next = change(app, { status: 'rejected', end_reason: reason, decided_at: nowIso(), ...firstDecision(app) }, user, 'rejected', note, reason);
-    transport.release(app.id);
+    busRelease(next, 'rejection'); // BR-09
     const r = listLabel('reject_reason', reason) || { label_en: reason, label_ar: reason };
     notify('application_rejected', familyUsers(app.family_id), { ref: app.ref, reason: { en: r.label_en, ar: r.label_ar } }, { applicationId: app.id });
     return next;
@@ -402,10 +462,27 @@ export function reject(user, appId, { reason, note }) {
 }
 
 /* ---------------- Cluster officer (SB-07, PP-22) ---------------- */
+/* BR-14: who approves an exceptional transfer before the school receives it.
+ *  cluster_officer (starting value) | ministry_admin | school (no prior approval – the school decides) */
+export const EXCEPTIONAL_APPROVERS = ['cluster_officer', 'ministry_admin', 'school'];
+export function exceptionalApprover() {
+  const v = setting('exceptional_transfer_approver', 'cluster_officer');
+  return EXCEPTIONAL_APPROVERS.includes(v) ? v : 'cluster_officer';
+}
+// Exceptional transfers are decided by the configured approver; every other escalation by the cluster officer.
+export function canDecideEscalation(user, app) {
+  if (app.status === 'escalated' && app.escalation_reason === 'exceptional_transfer') return user.role === exceptionalApprover();
+  return user.role === 'cluster_officer';
+}
+function assertCanDecide(user, app) {
+  if (!canDecideEscalation(user, app)) throw new AppError(403, 'not_the_approver', 'This escalation is decided by another role (BR-14)');
+}
+
 export function clusterApprove(user, appId, { note }) {
   return tx(() => {
     const app = getApp(appId);
     if (app.status !== 'escalated') throw new AppError(409, 'bad_state');
+    assertCanDecide(user, app);
     const next = change(app, { status: 'submitted', cluster_approved: 1, sla_due_at: addWorkingDays(nowIso(), setting('decision_sla_working_days', 2)) }, user, 'cluster_approved', note);
     const child = get('SELECT * FROM children WHERE id = ?', app.child_id);
     notify('cluster_approved', familyUsers(app.family_id), { ref: app.ref, child: bi(child, 'full_name') }, { applicationId: app.id });
@@ -420,6 +497,7 @@ export function clusterPlace(user, appId, { schoolId, sectionId, note }) {
   const app = tx(() => {
     const a = getApp(appId);
     if (!['escalated', 'submitted', 'under_review', 'passed'].includes(a.status)) throw new AppError(409, 'bad_state');
+    assertCanDecide(user, a);
     const s = school(schoolId);
     if (!s || (user.cluster_id && s.cluster_id !== user.cluster_id)) throw new AppError(403, 'outside_cluster');
     return change(a, { current_school_id: Number(schoolId), cluster_approved: 1, status: 'escalated' }, user, 'cluster_reassigned', `${school(a.current_school_id)?.name_en} → ${s.name_en}${note ? ' · ' + note : ''}`);
@@ -444,25 +522,23 @@ export function accept(user, appId) {
       checkAlerts(o.school_id, o.ay, o.grade);
     }
     const next = change(app, { status: 'accepted', decided_at: nowIso() }, user, 'accepted');
-    const seat = transport.confirm(app.id);
-    if (seat) event(next, seat.status === 'confirmed' ? 'bus_confirmed' : 'bus_waitlisted', null);
+    busStage(next, 'acceptance', null); // BR-09
     const sisRes = sis.confirmPlacement(next, enrolmentId);
     event(next, 'sis_placement_confirmed', null, sisRes.sis_reference);
     const child = get('SELECT * FROM children WHERE id = ?', app.child_id);
     const vars = { ref: app.ref, child: bi(child, 'full_name'), school: bi(school(app.current_school_id)), grade: app.grade, section: sec.name };
     notify('offer_accepted', familyUsers(app.family_id), vars, { applicationId: app.id });
     notify('offer_accepted_school', schoolStaff(app.current_school_id), vars, { applicationId: app.id });
-    if (seat) notify(seat.status === 'confirmed' ? 'bus_confirmed' : 'bus_waitlisted', familyUsers(app.family_id), vars, { applicationId: app.id });
     checkAlerts(app.current_school_id, app.ay, app.grade);
     return next;
   });
   return res;
 }
 
+const ENDING_OF = { offer_declined: 'decline', withdrawn: 'withdrawal', offer_lapsed: 'lapse', closed_no_response: 'closure' };
 function endWithRelease(user, app, status, action, reason) {
   const next = change(app, { status, end_reason: reason, decided_at: nowIso() }, user, action, null, reason);
-  const seat = transport.release(app.id);
-  if (seat) event(next, 'bus_released', null);
+  busRelease(next, ENDING_OF[action]); // BR-09
   if (app.status === 'offer_made') checkAlerts(app.current_school_id, app.ay, app.grade);
   return next;
 }

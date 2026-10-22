@@ -9,13 +9,17 @@ import { useReadOnly, ReadOnlyNote } from '../../components/AdminBits.jsx';
 
 // [setting key, requirement id, editor]
 const GROUPS = [
-  ['bo.rules.g_grades', [['grade_age_rules', 'BR-01', 'age'], ['transfer_grade_rule', 'BR-02', 'info'], ['eligible_schools_rule', 'BR-03', 'info']]],
+  ['bo.rules.g_grades', [['grade_age_rules', 'BR-01', 'age'], ['transfer_grade_rule', 'BR-02', 'transfer_grade'], ['eligible_schools_rule', 'BR-03', 'eligibility']]],
   ['bo.rules.g_applications', [['max_preferences', 'BR-04', 'number'], ['priority_order', 'BR-05', 'order'], ['max_active_applications_per_child', 'BR-11', 'number'], ['out_of_catchment_suggestions', 'PP-11', 'number']]],
   ['bo.rules.g_time', [['decision_sla_working_days', 'BR-06', 'number'], ['info_response_working_days', 'BR-07', 'number'], ['offer_acceptance_working_days', 'BR-08', 'number'], ['working_weekdays', 'AD-04', 'weekdays']]],
   ['bo.rules.g_docs', [['utility_bill_max_age_months', 'BR-10', 'number'], ['max_file_mb', 'PP-13', 'number'], ['allowed_file_types', 'PP-13', 'json'], ['doc_matrix', 'Section 6', 'matrix'], ['doc_conditions', 'Section 6', 'json']]],
-  ['bo.rules.g_capacity', [['capacity_warning_threshold', 'BR-12', 'number'], ['limited_seat_pct', 'PP-10', 'number'], ['bus_seat_hold', 'BR-09', 'json'], ['exceptional_transfer_approver', 'BR-14', 'approver'], ['default_emirate', 'PP-17', 'text']]],
+  ['bo.rules.g_capacity', [['capacity_warning_threshold', 'BR-12', 'number'], ['limited_seat_pct', 'PP-10', 'number'], ['bus_seat_hold', 'BR-09', 'bus'], ['exceptional_transfer_approver', 'BR-14', 'approver'], ['default_emirate', 'PP-17', 'text']]],
 ];
 const PATHS = ['new', 'private', 'other_emirate', 'abroad', 'renewal', 'renewal_moved'];
+const TRANSFER_PATHS = ['private', 'other_emirate', 'abroad', 'moe_transfer'];
+const ELIG_MODES = ['catchment_and_grade', 'catchment_or_radius', 'grade_in_cluster'];
+const BUS_STAGES = ['submission', 'offer', 'acceptance'];
+const BUS_ENDINGS = ['decline', 'lapse', 'withdrawal', 'rejection', 'closure'];
 const REQ = ['R', 'C', 'E', 'M', '-'];
 
 function Editor({ kind, value, onChange, ro }) {
@@ -23,7 +27,58 @@ function Editor({ kind, value, onChange, ro }) {
   const { label } = useAuth();
   if (kind === 'number') return <input type="number" style={{ maxWidth: 160 }} disabled={ro} value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))} />;
   if (kind === 'text' || kind === 'info') return <input disabled={ro} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
-  if (kind === 'approver') return <select disabled={ro} value={value} onChange={(e) => onChange(e.target.value)}>{['cluster_officer', 'ministry_admin'].map((r) => <option key={r} value={r}>{t(`role.${r}`)}</option>)}</select>;
+  if (kind === 'approver') return <select disabled={ro} value={value} style={{ maxWidth: 360 }} onChange={(e) => onChange(e.target.value)}>{['cluster_officer', 'ministry_admin', 'school'].map((r) => <option key={r} value={r}>{t(`bo.rules.approver.${r}`)}</option>)}</select>;
+  if (kind === 'transfer_grade') {
+    // older databases hold one mode for all pathways as a plain string
+    if (typeof value === 'string') value = Object.fromEntries(TRANSFER_PATHS.map((p) => [p, value]));
+    return (
+      <div className="form-grid">
+        {TRANSFER_PATHS.map((p) => (
+          <label key={p} className="field"><span>{t(`pathway.${p}`)}</span>
+            <select disabled={ro} value={value?.[p] || 'next_after_last_completed'} onChange={(e) => onChange({ ...value, [p]: e.target.value })}>
+              {['next_after_last_completed', 'by_age'].map((m) => <option key={m} value={m}>{t(`bo.rules.tg.${m}`)}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+    );
+  }
+  if (kind === 'eligibility') {
+    const v = typeof value === 'string' ? { mode: value, radius_km: 3 } : value || {};
+    return (
+      <div className="stack">
+        {ELIG_MODES.map((m) => (
+          <label key={m} className="check"><input type="radio" disabled={ro} checked={v.mode === m} onChange={() => onChange({ ...v, mode: m })} />{t(`bo.rules.elig.${m}`)}</label>
+        ))}
+        {v.mode === 'catchment_or_radius' && (
+          <label className="field" style={{ maxWidth: 220 }}><span>{t('bo.rules.radius')}</span><input type="number" min="0.5" step="0.5" disabled={ro} value={v.radius_km ?? 3} onChange={(e) => onChange({ ...v, radius_km: Number(e.target.value) })} /></label>
+        )}
+      </div>
+    );
+  }
+  if (kind === 'bus') {
+    const v = value || {};
+    const rel = v.release_on || [];
+    return (
+      <div className="stack">
+        <div className="form-grid">
+          <label className="field"><span>{t('bo.rules.bus.hold_from')}</span>
+            <select disabled={ro} value={v.hold_from} onChange={(e) => onChange({ ...v, hold_from: e.target.value })}>{BUS_STAGES.map((x) => <option key={x} value={x}>{t(`bo.rules.bus.stage.${x}`)}</option>)}</select>
+          </label>
+          <label className="field"><span>{t('bo.rules.bus.confirm_on')}</span>
+            <select disabled={ro} value={v.confirm_on} onChange={(e) => onChange({ ...v, confirm_on: e.target.value })}>{BUS_STAGES.slice(1).map((x) => <option key={x} value={x}>{t(`bo.rules.bus.stage.${x}`)}</option>)}</select>
+          </label>
+        </div>
+        {BUS_STAGES.indexOf(v.hold_from) > BUS_STAGES.indexOf(v.confirm_on) && <div className="alert warn small">{t('bo.rules.bus.order_warn')}</div>}
+        <div className="small" style={{ fontWeight: 500 }}>{t('bo.rules.bus.release_on')}</div>
+        <div className="row">
+          {BUS_ENDINGS.map((x) => (
+            <label key={x} className="check"><input type="checkbox" disabled={ro} checked={rel.includes(x)} onChange={(e) => onChange({ ...v, release_on: e.target.checked ? [...rel, x] : rel.filter((y) => y !== x) })} />{t(`bo.rules.bus.ending.${x}`)}</label>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (kind === 'age') {
     return (
       <div className="form-grid">

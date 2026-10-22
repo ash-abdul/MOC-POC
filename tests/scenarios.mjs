@@ -209,5 +209,67 @@ ok(tooMany.status === 400 && tooMany.data.error === 'too_many_preferences', 'new
 ok((await call(hessa, 'GET', '/admin/audit?action=setting.changed')).data.length > 0, 'audit entry created');
 await call(hessa, 'PUT', '/admin/settings/max_preferences', { value: 3 });
 
+console.log('BR-02 / BR-03 / BR-09 / BR-14 – configurable rules take effect');
+const RULES = ['transfer_grade_rule', 'eligible_schools_rule', 'bus_seat_hold', 'exceptional_transfer_approver'];
+const allSettings = (await call(hessa, 'GET', '/admin/settings')).data;
+const saved = Object.fromEntries(RULES.map((k) => [k, allSettings.find((x) => x.key === k).value]));
+const setRule = (k, value) => call(hessa, 'PUT', `/admin/settings/${k}`, { value, reason: 'scenario test' });
+ok((await setRule('bus_seat_hold', { hold_from: 'acceptance', confirm_on: 'offer', release_on: [] })).status === 400, 'invalid rule value is refused');
+ok((await call(viewer, 'PUT', '/admin/settings/exceptional_transfer_approver', { value: 'school' })).status === 403, 'Ministry Viewer cannot change BR-14');
+
+// BR-02: transfers from abroad placed by age instead of next grade
+const eg = async () => (await call(null, 'GET', '/lookups/eligible-grade?dob=2015-03-01&last=G1&pathway=abroad')).data.grade;
+const g0 = await eg();
+await setRule('transfer_grade_rule', { ...saved.transfer_grade_rule, abroad: 'by_age' });
+const g1 = await eg();
+ok(g0 === 'G2' && g1 === 'G7', `BR-02 transfer from abroad: ${g0} (next grade) → ${g1} (by age)`);
+
+// BR-03: widen eligibility from catchment to the whole cluster
+const n0 = (await call(F, 'GET', '/family/eligible-schools?grade=KG1')).data.eligible.length;
+await setRule('eligible_schools_rule', { mode: 'grade_in_cluster', radius_km: 3 });
+const n1 = (await call(F, 'GET', '/family/eligible-schools?grade=KG1')).data.eligible.length;
+ok(n0 === 3 && n1 > n0, `BR-03 schools listed for the same home: ${n0} (catchment) → ${n1} (cluster)`);
+await setRule('eligible_schools_rule', saved.eligible_schools_rule);
+
+// BR-09: hold and confirm the bus seat at the offer instead of submission / acceptance
+await setRule('bus_seat_hold', { hold_from: 'offer', confirm_on: 'offer', release_on: ['decline', 'lapse', 'withdrawal', 'rejection', 'closure'] });
+await call(ahmed, 'PATCH', `/family/applications/${d13.id}`, { preferences: [sid('SHJ-S04')], transport_mode: 'bus', declarations: true });
+await fillChecklist(ahmed, d13.id, ys.data.child.id);
+const s09 = await call(ahmed, 'POST', `/family/applications/${d13.id}/submit`);
+ok(s09.status === 200 && !s09.data.bus?.status, 'BR-09 no seat held at submission', s09.data);
+const R4 = await staff((p) => p.role === 'registrar' && p.school_code === 'SHJ-S04');
+await call(R4, 'POST', `/applications/${d13.id}/offer`, {});
+const t09 = (await call(ahmed, 'GET', `/family/applications/${d13.id}`)).data.app;
+ok(t09.status === 'offer_made' && t09.bus?.status === 'confirmed', 'BR-09 seat held and confirmed at the offer', t09.bus);
+
+// BR-14: exceptional transfers – no prior approval, then Ministry Administrator approval
+const excCands = [];
+for (const a of (await call(null, 'GET', '/auth/uaepass/accounts')).data.filter((x) => !x.note)) {
+  if (excCands.length >= 2) break;
+  const tk = (await uaepass(a.emirates_id)).token;
+  const fam = (await call(tk, 'GET', '/family')).data;
+  const c = fam.children?.find((x) => x.enrolment?.status === 'enrolled' && x.can_apply);
+  if (c) excCands.push({ tk, c });
+}
+async function exceptional({ tk, c }) {
+  const d = (await call(tk, 'POST', '/family/applications', { childId: c.id, pathway: 'moe_transfer' })).data;
+  const el = (await call(tk, 'GET', `/family/eligible-schools?grade=${d.grade}&childId=${c.id}`)).data;
+  const target = el.eligible.find((x) => x.seat_status !== 'full') || el.alternatives[0];
+  await call(tk, 'PATCH', `/family/applications/${d.id}`, { preferences: [target.id], transport_mode: 'dropoff', declarations: true, exceptional_reason: 'medical' });
+  await fillChecklist(tk, d.id, c.id);
+  return call(tk, 'POST', `/family/applications/${d.id}/submit`);
+}
+await setRule('exceptional_transfer_approver', 'school');
+const e1 = await exceptional(excCands[0]);
+ok(e1.data.exceptional === 1 && e1.data.status !== 'escalated', `BR-14 "school decides": goes straight to the school (${e1.data.status})`, e1.data);
+await setRule('exceptional_transfer_approver', 'ministry_admin');
+const e2 = await exceptional(excCands[1]);
+ok(e2.data.status === 'escalated' && e2.data.escalation_reason === 'exceptional_transfer', 'BR-14 "Ministry Administrator": escalated for approval', e2.data);
+ok((await call(CO, 'POST', `/applications/${e2.data.id}/cluster-approve`, {})).status === 403, 'BR-14 cluster officer can no longer approve it');
+const e2a = await call(hessa, 'POST', `/applications/${e2.data.id}/cluster-approve`, {});
+ok(e2a.data.status === 'submitted' || e2a.data.status === 'passed', 'BR-14 Ministry Administrator approves; the school receives it', e2a.data);
+ok((await call(hessa, 'GET', '/admin/audit?action=setting.changed')).data.filter((a) => RULES.includes(a.entity_id)).length >= 6, 'every rule change is in the audit log');
+for (const k of RULES) await setRule(k, saved[k]);
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll scenario checks passed');
 process.exit(failures ? 1 : 0);

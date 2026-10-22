@@ -71,5 +71,6 @@ function norm(v) {
 
 export const parse = (s, d = null) => {
   if (s == null) return d;
+  if (typeof s !== 'string') return s; // already parsed (e.g. an in-memory row after an update)
   try { return JSON.parse(s); } catch { return d; }
 };

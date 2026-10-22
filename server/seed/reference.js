@@ -3,14 +3,14 @@
 
 export const SETTINGS = {
   grade_age_rules: { cutoff: '12-31', ages: { KG1: 4, KG2: 5, G1: 6 } },                // BR-01
-  transfer_grade_rule: 'next_after_last_completed',                                       // BR-02
-  eligible_schools_rule: 'catchment_and_grade',                                           // BR-03
+  transfer_grade_rule: { private: 'next_after_last_completed', other_emirate: 'next_after_last_completed', abroad: 'next_after_last_completed', moe_transfer: 'next_after_last_completed' }, // BR-02
+  eligible_schools_rule: { mode: 'catchment_and_grade', radius_km: 3 },                   // BR-03
   max_preferences: 3,                                                                     // BR-04
   priority_order: ['sod', 'sibling', 'national', 'distance', 'submitted'],                // BR-05
   decision_sla_working_days: 2,                                                           // BR-06
   info_response_working_days: 5,                                                          // BR-07
   offer_acceptance_working_days: 5,                                                       // BR-08
-  bus_seat_hold: { hold_from: 'submission', confirm_on: 'acceptance', release_on: ['decline', 'lapse', 'withdrawal', 'rejection'] }, // BR-09
+  bus_seat_hold: { hold_from: 'submission', confirm_on: 'acceptance', release_on: ['decline', 'lapse', 'withdrawal', 'rejection', 'closure'] }, // BR-09
   utility_bill_max_age_months: 3,                                                         // BR-10
   max_active_applications_per_child: 1,                                                   // BR-11
   capacity_warning_threshold: 90,                                                         // BR-12

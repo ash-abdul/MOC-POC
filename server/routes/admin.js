@@ -1,7 +1,7 @@
 // Ministry administration (sections 4.3 and 4.6). Every change is written to the audit log.
 import { Router } from 'express';
 import { all, get, insert, update, run, parse } from '../db/index.js';
-import { AppError, audit, setting, putSetting, nowIso, admissionAY, clearCaches, GRADES } from '../services/core.js';
+import { AppError, audit, setting, putSetting, nowIso, admissionAY, clearCaches, GRADES, TRANSFER_GRADE_MODES } from '../services/core.js';
 import { setGradeConfig, sectionSeats, checkAlerts, schoolGrades } from '../services/capacity.js';
 import * as A from '../services/applications.js';
 import { requireRole, wrap } from './common.js';
@@ -56,10 +56,21 @@ r.put('/catchments/:schoolId', ADMIN, wrap((req) => {
 }));
 
 /* AD-02 rules / settings */
+// Structured rules are checked before saving so an invalid value is refused rather than ignored.
+const TRANSFER_PATHWAYS = ['private', 'other_emirate', 'abroad', 'moe_transfer'];
+const VALIDATE = {
+  transfer_grade_rule: (v) => v && TRANSFER_PATHWAYS.every((p) => TRANSFER_GRADE_MODES.includes(v[p])),
+  eligible_schools_rule: (v) => v && A.ELIGIBILITY_MODES.includes(v.mode) && (v.mode !== 'catchment_or_radius' || Number(v.radius_km) > 0),
+  bus_seat_hold: (v) => v && A.BUS_HOLD_FROM.includes(v.hold_from) && A.BUS_CONFIRM_ON.includes(v.confirm_on)
+    && A.BUS_HOLD_FROM.indexOf(v.hold_from) <= A.BUS_HOLD_FROM.indexOf(v.confirm_on)
+    && Array.isArray(v.release_on) && v.release_on.every((e) => A.BUS_RELEASE_EVENTS.includes(e)),
+  exceptional_transfer_approver: (v) => A.EXCEPTIONAL_APPROVERS.includes(v),
+};
 r.get('/settings', READ, wrap(() => all('SELECT * FROM settings ORDER BY key').map((s) => ({ ...s, value: parse(s.value) }))));
 r.put('/settings/:key', ADMIN, wrap((req) => {
   const prev = setting(req.params.key);
   if (prev === null && !get('SELECT 1 FROM settings WHERE key = ?', req.params.key)) throw new AppError(404, 'unknown_setting');
+  if (VALIDATE[req.params.key] && !VALIDATE[req.params.key](req.body.value)) throw new AppError(400, 'invalid_rule_value', `Invalid value for ${req.params.key}`);
   putSetting(req.params.key, req.body.value);
   audit(req.user, 'setting.changed', 'setting', req.params.key, prev, req.body.value, req.body.reason);
   if (req.params.key === 'capacity_warning_threshold') for (const s of all('SELECT id FROM schools')) for (const g of schoolGrades(s.id, admissionAY().code)) checkAlerts(s.id, admissionAY().code, g);

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { all, get, insert, update, parse, UPLOAD_DIR } from '../db/index.js';
 import {
-  AppError, nowIso, today, eligibleGrade, admissionAY, currentAY, windowStatus, setting, audit, nextGrade, cycleOf, isoDate,
+  AppError, nowIso, today, eligibleGrade, admissionAY, currentAY, windowStatus, setting, audit, isoDate,
 } from '../services/core.js';
 import { icp, sis, maps, transport } from '../mocks/index.js';
 import * as A from '../services/applications.js';
@@ -38,7 +38,10 @@ function childSummary(c) {
   const apps = all(`SELECT a.id, a.ref, a.status, a.type, a.pathway, a.grade, a.ay, a.submitted_at, a.offer_due_at, a.info_due_at, a.exceptional, s.name_en school_en, s.name_ar school_ar
                       FROM applications a LEFT JOIN schools s ON s.id = a.current_school_id WHERE a.child_id = ? ORDER BY a.id DESC`, c.id);
   const active = apps.find((a) => A.ACTIVE.includes(a.status) && a.ay === ay);
-  const elig = enr && enr.status !== 'left' ? { grade: nextGrade(enr.grade), cycle: cycleOf(nextGrade(enr.grade)), rule: 'BR-02' } : eligibleGrade({ dob: c.dob, lastCompletedGrade: c.last_completed_grade, pathway: c.last_completed_grade ? 'transfer' : 'new' });
+  // current MoE students move on from the grade they are in now (BR-02 for the moe_transfer pathway)
+  const elig = enr && enr.status !== 'left'
+    ? eligibleGrade({ dob: c.dob, lastCompletedGrade: enr.grade, pathway: 'moe_transfer' })
+    : eligibleGrade({ dob: c.dob, lastCompletedGrade: c.last_completed_grade, pathway: c.last_completed_grade ? ({ moe: 'moe_transfer' })[c.schooling_status] || c.schooling_status || 'private' : 'new' });
   return {
     ...c, eligible: { ...elig, ay }, enrolment: enr || null, next_year: nxt || null, applications: apps, active_application: active || null,
     can_renew: !!nxt && nxt.status === 'pending_renewal' && !active && windowStatus(ay, 'renewal').open,
@@ -184,8 +187,7 @@ r.post('/applications', wrap((req) => {
   A.assertOneActive(c.id, ay);
   const s = sis.lookup(c.emirates_id);
   let grade;
-  if (s.enrolled) grade = nextGrade(s.grade);
-  else grade = eligibleGrade({ dob: c.dob, lastCompletedGrade: c.last_completed_grade, pathway }).grade;
+  grade = eligibleGrade({ dob: c.dob, lastCompletedGrade: s.enrolled ? s.grade : c.last_completed_grade, pathway }).grade;
   if (!grade) throw new AppError(400, 'no_eligible_grade');
   const type = A.TYPE_OF[pathway];
   if (type === 'new' && !windowStatus(ay, 'new').open) throw new AppError(409, 'window_closed', 'The new registration window is closed');

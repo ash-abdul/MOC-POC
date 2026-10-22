@@ -67,7 +67,7 @@ r.get('/applications/:id', requireRole(...BACK, 'transport'), wrap((req) => {
     priority: { order: setting('priority_order'), key },
     can: {
       decide: (SCHOOL.includes(req.user.role) && app.current_school_id === req.user.school_id && ['submitted', 'under_review', 'passed'].includes(app.status)),
-      cluster: req.user.role === 'cluster_officer' && ['escalated', 'submitted', 'under_review', 'passed'].includes(app.status),
+      cluster: ['escalated', 'submitted', 'under_review', 'passed'].includes(app.status) && A.canDecideEscalation(req.user, app), // SB-07 / BR-14
       force: req.user.role === 'ministry_admin' && !!req.user.force_registration && A.OPEN.includes(app.status) && app.status !== 'offer_made',
     },
   };
@@ -77,9 +77,9 @@ r.post('/applications/:id/request-info', requireRole(...SCHOOL), wrap((req) => A
 r.post('/applications/:id/offer', requireRole(...SCHOOL, 'cluster_officer'), wrap((req) => A.appView(A.offer(req.user, Number(req.params.id), { sectionId: req.body.sectionId }))));
 r.post('/applications/:id/pass', requireRole(...SCHOOL), wrap((req) => A.appView(A.passNext(req.user, Number(req.params.id), { note: req.body.note }))));
 r.post('/applications/:id/escalate', requireRole(...SCHOOL), wrap((req) => A.appView(A.escalate(req.user, Number(req.params.id), req.body))));
-r.post('/applications/:id/reject', requireRole(...SCHOOL, 'cluster_officer'), wrap((req) => A.appView(A.reject(req.user, Number(req.params.id), req.body))));
-r.post('/applications/:id/cluster-approve', requireRole('cluster_officer'), wrap((req) => A.appView(A.clusterApprove(req.user, Number(req.params.id), req.body))));
-r.post('/applications/:id/cluster-place', requireRole('cluster_officer'), wrap((req) => A.appView(A.clusterPlace(req.user, Number(req.params.id), req.body))));
+r.post('/applications/:id/reject', requireRole(...SCHOOL, 'cluster_officer', 'ministry_admin'), wrap((req) => A.appView(A.reject(req.user, Number(req.params.id), req.body))));
+r.post('/applications/:id/cluster-approve', requireRole('cluster_officer', 'ministry_admin'), wrap((req) => A.appView(A.clusterApprove(req.user, Number(req.params.id), req.body))));
+r.post('/applications/:id/cluster-place', requireRole('cluster_officer', 'ministry_admin'), wrap((req) => A.appView(A.clusterPlace(req.user, Number(req.params.id), req.body))));
 
 /* SB-03 document decisions */
 r.post('/documents/:id/decision', requireRole(...SCHOOL), wrap((req) => {

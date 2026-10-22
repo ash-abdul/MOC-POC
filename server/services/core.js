@@ -64,13 +64,27 @@ export function windowStatus(ay, type) {
 }
 
 /* BR-01 / BR-02: eligible grade
- * New entrants: age on the cut-off date (default 31 Dec) of the admission year.
- * Transfers: next grade after the last completed grade. */
+ * New entrants: age on the cut-off date (default 31 Dec) of the admission year (BR-01).
+ * Transfers: per pathway, either the next grade after the last completed grade or placement by age (BR-02). */
+export const TRANSFER_GRADE_MODES = ['next_after_last_completed', 'by_age'];
+export function transferGradeMode(pathway) {
+  const r = setting('transfer_grade_rule', 'next_after_last_completed');
+  const mode = typeof r === 'string' ? r : r?.[pathway] ?? r?.default ?? 'next_after_last_completed';
+  return TRANSFER_GRADE_MODES.includes(mode) ? mode : 'next_after_last_completed';
+}
+
 export function eligibleGrade({ dob, lastCompletedGrade, pathway }, ay = admissionAY().code) {
   if (lastCompletedGrade && pathway !== 'new') {
-    const g = nextGrade(lastCompletedGrade);
-    return g ? { grade: g, cycle: cycleOf(g), rule: 'BR-02' } : { grade: null, rule: 'BR-02', reason: 'completed_g12' };
+    if (transferGradeMode(pathway) === 'next_after_last_completed' || !dob) {
+      const g = nextGrade(lastCompletedGrade);
+      return g ? { grade: g, cycle: cycleOf(g), rule: 'BR-02' } : { grade: null, rule: 'BR-02', reason: 'completed_g12' };
+    }
+    return { ...gradeByAge(dob, ay), rule: 'BR-02' };
   }
+  return gradeByAge(dob, ay);
+}
+
+function gradeByAge(dob, ay) {
   const r = setting('grade_age_rules');
   const year = ayStartYear(ay);
   const [mm, dd] = r.cutoff.split('-').map(Number);

@@ -172,7 +172,7 @@ function StepSchools({ d, reload, back, next }) {
           <div className="row" style={{ alignItems: 'flex-start', gap: 16 }}>
             <div style={{ flex: '3 1 420px', minWidth: 0 }}>
               <Card title={t('parent.apply.eligible_title', { grade: gradeLabel(t, a.grade) })}>
-                <p className="small muted">{t('parent.apply.eligible_note', { area: L(e.location, 'area') || '—' })} <ReqTag id="BR-03" /></p>
+                <p className="small muted">{t(`parent.apply.eligible_note.${e.rule?.mode || 'catchment_and_grade'}`, { area: L(e.location, 'area') || '—', km: e.rule?.radius_km })} <ReqTag id="BR-03" /></p>
                 {e.eligible.length === 0 && <div className="alert warn small">{t('parent.apply.none_in_catchment')}</div>}
                 {e.eligible.map(schoolRow)}
                 {!e.any_seat && (
