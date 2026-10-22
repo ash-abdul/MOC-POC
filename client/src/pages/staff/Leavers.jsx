@@ -11,17 +11,19 @@ function LeaveForm({ init, onSubmit, onClose, busy, title }) {
   const [f, setF] = useState({ reason: init.leave_reason || '', subreason: init.leave_subreason || '', leaveDate: init.leave_date || '', destination: init.leave_destination || '', note: init.leave_note || '' });
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value, ...(k === 'reason' ? { subreason: '' } : {}) }));
   const subs = listOf('leave_subreason', f.reason);
-  const ok = f.reason && f.leaveDate && (f.reason === 'other' ? f.note : f.subreason);
+  // a reason with sub-reasons needs one; a reason without (e.g. Other) needs details (BR-13)
+  const needsNote = !!f.reason && subs.length === 0;
+  const ok = f.reason && f.leaveDate && (needsNote ? f.note : f.subreason);
   return (
     <Modal title={title} onClose={onClose} footer={<button className="btn" disabled={!ok || busy} onClick={() => onSubmit(f)}>{t('bo.leavers.confirm')}</button>}>
       <div className="alert info small mb">{t('bo.leavers.release_note')}</div>
       <div className="form-grid">
         <Field label={t('col.reason')} required><select value={f.reason} onChange={set('reason')}><option value="" />{listOf('leave_reason').map((r) => <option key={r.code} value={r.code}>{L(r, 'label')}</option>)}</select></Field>
-        {f.reason !== 'other' && <Field label={t('col.subreason')} required><select value={f.subreason} onChange={set('subreason')}><option value="" />{subs.map((r) => <option key={r.code} value={r.code}>{L(r, 'label')}</option>)}</select></Field>}
+        {!needsNote && <Field label={t('col.subreason')} required><select value={f.subreason} onChange={set('subreason')}><option value="" />{subs.map((r) => <option key={r.code} value={r.code}>{L(r, 'label')}</option>)}</select></Field>}
         <Field label={t('bo.leavers.date')} required><input type="date" value={f.leaveDate} onChange={set('leaveDate')} /></Field>
         <Field label={t('bo.leavers.destination')}><input value={f.destination} onChange={set('destination')} /></Field>
       </div>
-      <Field label={f.reason === 'other' ? t('bo.leavers.details_required') : t('common.note')}><textarea rows={2} value={f.note} onChange={set('note')} /></Field>
+      <Field label={needsNote ? t('bo.leavers.details_required') : t('common.note')}><textarea rows={2} value={f.note} onChange={set('note')} /></Field>
     </Modal>
   );
 }

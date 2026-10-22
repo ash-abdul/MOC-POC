@@ -271,5 +271,54 @@ ok(e2a.data.status === 'submitted' || e2a.data.status === 'passed', 'BR-14 Minis
 ok((await call(hessa, 'GET', '/admin/audit?action=setting.changed')).data.filter((a) => RULES.includes(a.entity_id)).length >= 6, 'every rule change is in the audit log');
 for (const k of RULES) await setRule(k, saved[k]);
 
+console.log("A13 – the Ministry's own capacity, catchment, document list, leaving reason and academic year");
+const AY = lookups.admission_ay.code;
+// a capacity value
+const capOf = async () => (await call(hessa, 'GET', `/schools/${sid('SHJ-S02')}/capacity`)).data.grades.find((g) => g.grade === 'KG1');
+const c0 = await capOf();
+const nSec = c0.sections.length, max0 = c0.sections[0].capacity;
+ok((await call(viewer, 'PUT', '/admin/capacity', { schoolId: sid('SHJ-S02'), ay: AY, grade: 'KG1', sections: nSec, maxStudents: max0 + 5, offered: true })).status === 403, 'viewer cannot change capacity');
+await call(hessa, 'PUT', '/admin/capacity', { schoolId: sid('SHJ-S02'), ay: AY, grade: 'KG1', sections: nSec, maxStudents: max0 + 5, offered: true });
+const c1 = await capOf();
+ok(c1.capacity === c0.capacity + 5 * nSec && c1.available === c0.available + 5 * nSec, `capacity value: Al Nahda KG KG1 ${c0.capacity} → ${c1.capacity} seats, available follows`);
+await call(hessa, 'PUT', '/admin/capacity', { schoolId: sid('SHJ-S02'), ay: AY, grade: 'KG1', sections: nSec, maxStudents: max0, offered: true });
+
+// a catchment boundary
+const s02 = (await call(hessa, 'GET', '/admin/catchments')).data.find((c) => c.school_id === sid('SHJ-S02'));
+const far = { type: 'Polygon', coordinates: [[[55.60, 25.10], [55.62, 25.10], [55.62, 25.12], [55.60, 25.12], [55.60, 25.10]]] };
+await call(hessa, 'PUT', `/admin/catchments/${sid('SHJ-S02')}`, { geojson: far });
+const elC = (await call(F, 'GET', '/family/eligible-schools?grade=KG1')).data.eligible.map((x) => x.code);
+ok(!elC.includes('SHJ-S02') && elC.length === 2, 'catchment boundary: a home the new boundary no longer covers stops seeing that school');
+await call(hessa, 'PUT', `/admin/catchments/${sid('SHJ-S02')}`, { geojson: s02.geojson });
+
+// a document list
+const nd = await call(hessa, 'POST', '/admin/lists', { list_type: 'doc_type', code: 'medical_fitness', label_en: 'Medical fitness certificate', label_ar: 'شهادة اللياقة الطبية', matrix: { new: 'R', private: 'R', other_emirate: 'R', abroad: 'R', renewal: '-', renewal_moved: 'R' } });
+const ck2 = (await call(ahmed, 'GET', `/family/applications/${rn.data.app.id}`)).data.checklist;
+ok(nd.status === 200 && ck2.some((x) => x.doc_type === 'medical_fitness' && x.needed), 'document list: a new document type is required on new checklists');
+
+// a leaving reason
+await call(hessa, 'POST', '/admin/lists', { list_type: 'leave_reason', code: 'specialist_centre', label_en: 'Moved to a specialist centre', label_ar: 'الانتقال إلى مركز متخصص' });
+await call(hessa, 'POST', '/admin/lists', { list_type: 'leave_subreason', code: 'sc_health', parent_code: 'specialist_centre', label_en: 'Health needs', label_ar: 'احتياجات صحية' });
+const lvC = excCands[0];
+ok((await call(lvC.tk, 'POST', `/family/children/${lvC.c.id}/leave`, { reason: 'not_a_reason', subreason: 'x', leaveDate: today })).status === 400, 'a reason that is not in the list is refused');
+const lv = await call(lvC.tk, 'POST', `/family/children/${lvC.c.id}/leave`, { reason: 'specialist_centre', subreason: 'sc_health', leaveDate: today });
+const regL = await staff((p) => p.role === 'registrar' && p.school_code === lookups.schools.find((x) => x.id === lvC.c.enrolment.school_id).code);
+const lr2 = (await call(regL, 'GET', '/leavers?view=requests')).data.find((x) => x.child_id === lvC.c.id);
+const cf2 = await call(regL, 'POST', `/leavers/${lr2.id}/confirm`, {});
+const ir7b = (await call(viewer, 'GET', `/reports/IR-07?from=${today}&to=${today}`)).data.rows;
+ok(lv.status === 200 && cf2.data.status === 'left' && ir7b.some((r) => r.subreason === 'Health needs'), 'leaving reason: the new reason is usable and appears in IR-07');
+
+// an academic year (AD-01)
+ok((await call(viewer, 'POST', '/admin/academic-years', { code: '2028-29', start_date: '2028-08-21', end_date: '2029-06-29' })).status === 403, 'viewer cannot add an academic year');
+const ay29 = await call(hessa, 'POST', '/admin/academic-years', { code: '2028-29', start_date: '2028-08-21', end_date: '2029-06-29', copy_capacity_from: AY });
+const cap29 = (await call(hessa, 'GET', `/schools/${sid('SHJ-S01')}/capacity?ay=2028-29`)).data;
+const win29 = (await call(hessa, 'GET', '/admin/windows')).data.windows.filter((w) => w.ay === '2028-29');
+ok(ay29.status === 200 && ay29.data.sections_copied > 0 && cap29.capacity > 0 && win29.length === 3, `academic year 2028-29 added with its 3 windows and ${ay29.data?.sections_copied} sections copied`);
+ok((await call(hessa, 'POST', '/admin/academic-years', { code: '2028-30', start_date: '2028-08-21', end_date: '2029-06-29' })).status === 400, 'a malformed academic year is refused');
+ok((await call(hessa, 'DELETE', `/admin/academic-years/${lookups.current_ay.code}`)).status === 409, 'a year in use cannot be deleted');
+ok((await call(hessa, 'DELETE', '/admin/academic-years/2028-29')).status === 200, 'an unused year can be deleted');
+const acts = (await call(hessa, 'GET', '/admin/audit?limit=300')).data.map((a) => a.action);
+ok(['capacity.grade_config', 'catchment.updated', 'list.item_added', 'academic_year.created', 'academic_year.deleted'].every((a) => acts.includes(a)), 'an audit entry for each change');
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll scenario checks passed');
 process.exit(failures ? 1 : 0);

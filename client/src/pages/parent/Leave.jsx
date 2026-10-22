@@ -23,7 +23,9 @@ export default function Leave() {
         const c = d.children.find((x) => x.id === Number(id));
         if (!c) return <div className="alert error">{t('error.not_found')}</div>;
         const subs = f.reason ? listOf('leave_subreason', f.reason) : [];
-        const valid = f.reason && f.leaveDate && (f.reason === 'other' ? f.note.trim() : f.subreason);
+        // a reason with sub-reasons needs one; a reason without (e.g. Other) needs details (BR-13)
+        const needsNote = !!f.reason && subs.length === 0;
+        const valid = f.reason && f.leaveDate && (needsNote ? f.note.trim() : f.subreason);
         const submit = () => run(async () => setDone(await api.post(`/family/children/${c.id}/leave`, f)));
         if (done) {
           return (
@@ -57,8 +59,8 @@ export default function Leave() {
                 <Field label={t('parent.leave.date')} required><input type="date" value={f.leaveDate} min={lookups.today} onChange={set('leaveDate')} /></Field>
                 <Field label={t('parent.leave.destination')} hint={t('parent.leave.destination_hint')}><input value={f.destination} onChange={set('destination')} /></Field>
               </div>
-              {(f.reason === 'other' || f.subreason.endsWith('other')) && (
-                <Field label={t('parent.leave.details')} required={f.reason === 'other'}><textarea rows={2} value={f.note} onChange={set('note')} /></Field>
+              {(needsNote || f.subreason.endsWith('other')) && (
+                <Field label={t('parent.leave.details')} required={needsNote}><textarea rows={2} value={f.note} onChange={set('note')} /></Field>
               )}
               <div className="alert info small mt">{t('parent.leave.note')} <ReqTag id="SB-08" /></div>
               <div className="row mt">

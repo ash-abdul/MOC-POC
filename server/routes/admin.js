@@ -78,13 +78,85 @@ r.put('/settings/:key', ADMIN, wrap((req) => {
 }));
 
 /* AD-01 academic years & windows */
-r.get('/windows', READ, wrap(() => ({ years: all('SELECT * FROM academic_years ORDER BY code'), windows: all('SELECT * FROM windows ORDER BY ay, type') })));
+const yearInUse = (code) => get(`SELECT (SELECT COUNT(*) FROM applications WHERE ay = ?) + (SELECT COUNT(*) FROM enrolments WHERE ay = ?) n`, code, code).n;
+r.get('/windows', READ, wrap(() => ({ years: all('SELECT * FROM academic_years ORDER BY code').map((y) => ({ ...y, in_use: yearInUse(y.code) > 0 })), windows: all('SELECT * FROM windows ORDER BY ay, type') })));
 r.put('/windows/:id', ADMIN, wrap((req) => {
   const w = get('SELECT * FROM windows WHERE id = ?', req.params.id);
   if (!w) throw new AppError(404, 'not_found');
-  if (req.body.open_date > req.body.close_date) throw new AppError(400, 'bad_dates');
+  if (!DATE.test(req.body.open_date || '') || !DATE.test(req.body.close_date || '') || req.body.open_date > req.body.close_date) throw new AppError(400, 'bad_dates');
   update('windows', w.id, { open_date: req.body.open_date, close_date: req.body.close_date });
   audit(req.user, 'window.changed', 'window', `${w.ay}:${w.type}`, { open: w.open_date, close: w.close_date }, { open: req.body.open_date, close: req.body.close_date });
+  return { ok: true };
+}));
+
+// Academic years: create (with its three windows and, optionally, a copy of another year's
+// sections), change dates, choose the running / admission year, delete while unused.
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const WIN_TYPES = ['new', 'renewal', 'transfer'];
+// default windows follow the starting pattern: new 15 Sep–31 Mar, renewal Oct–Dec, transfer Mar–May
+const defaultWindows = (y) => ({
+  new: { open_date: `${y - 1}-09-15`, close_date: `${y}-03-31` },
+  renewal: { open_date: `${y - 1}-10-01`, close_date: `${y - 1}-12-31` },
+  transfer: { open_date: `${y}-03-01`, close_date: `${y}-05-31` },
+});
+function checkYearDates(code, start, end) {
+  if (!DATE.test(start || '') || !DATE.test(end || '') || start >= end) throw new AppError(400, 'bad_dates', 'Start date must be before end date');
+  if (start.slice(0, 4) !== code.slice(0, 4)) throw new AppError(400, 'bad_dates', `The year ${code} must start in ${code.slice(0, 4)}`);
+}
+
+r.post('/academic-years', ADMIN, wrap((req) => {
+  const b = req.body;
+  const m = String(b.code || '').match(/^(\d{4})-(\d{2})$/);
+  if (!m || (Number(m[1]) + 1) % 100 !== Number(m[2])) throw new AppError(400, 'bad_year_code', 'Use the form 2028-29');
+  if (get('SELECT 1 FROM academic_years WHERE code = ?', b.code)) throw new AppError(409, 'year_exists', 'This academic year already exists');
+  checkYearDates(b.code, b.start_date, b.end_date);
+  const wins = { ...defaultWindows(Number(m[1])), ...(b.windows || {}) };
+  for (const t of WIN_TYPES) if (!DATE.test(wins[t].open_date) || !DATE.test(wins[t].close_date) || wins[t].open_date > wins[t].close_date) throw new AppError(400, 'bad_dates', `Invalid ${t} window`);
+  if (b.copy_capacity_from && !get('SELECT 1 FROM academic_years WHERE code = ?', b.copy_capacity_from)) throw new AppError(400, 'bad_source_year');
+  insert('academic_years', { code: b.code, start_date: b.start_date, end_date: b.end_date, is_current: 0, is_admission: 0 });
+  for (const t of WIN_TYPES) insert('windows', { ay: b.code, type: t, ...wins[t] });
+  let copied = 0;
+  if (b.copy_capacity_from) {
+    copied = Number(run(`INSERT INTO sections (school_id, ay, grade, name, max_students) SELECT school_id, ?, grade, name, max_students FROM sections WHERE ay = ?`, b.code, b.copy_capacity_from).changes);
+  }
+  audit(req.user, 'academic_year.created', 'academic_year', b.code, null, { start_date: b.start_date, end_date: b.end_date, windows: wins, copy_capacity_from: b.copy_capacity_from || null, sections_copied: copied }, b.reason);
+  return { ok: true, sections_copied: copied };
+}));
+
+r.put('/academic-years/:code', ADMIN, wrap((req) => {
+  const y = get('SELECT * FROM academic_years WHERE code = ?', req.params.code);
+  if (!y) throw new AppError(404, 'not_found');
+  checkYearDates(y.code, req.body.start_date, req.body.end_date);
+  update('academic_years', y.code, { start_date: req.body.start_date, end_date: req.body.end_date }, 'code');
+  audit(req.user, 'academic_year.changed', 'academic_year', y.code, { start_date: y.start_date, end_date: y.end_date }, { start_date: req.body.start_date, end_date: req.body.end_date }, req.body.reason);
+  return { ok: true };
+}));
+
+// role = 'current' (the running school year) or 'admission' (the year parents apply for)
+r.post('/academic-years/:code/role', ADMIN, wrap((req) => {
+  const y = get('SELECT * FROM academic_years WHERE code = ?', req.params.code);
+  if (!y) throw new AppError(404, 'not_found');
+  const role = req.body.role;
+  if (!['current', 'admission'].includes(role)) throw new AppError(400, 'bad_request');
+  const cur = get('SELECT code FROM academic_years WHERE is_current = 1')?.code;
+  const adm = get('SELECT code FROM academic_years WHERE is_admission = 1')?.code;
+  if (role === 'admission' && cur && y.code < cur) throw new AppError(400, 'bad_year_order', 'The admission year cannot be earlier than the current year');
+  if (role === 'current' && adm && y.code > adm) throw new AppError(400, 'bad_year_order', 'The current year cannot be later than the admission year');
+  const col = role === 'current' ? 'is_current' : 'is_admission';
+  run(`UPDATE academic_years SET ${col} = CASE WHEN code = ? THEN 1 ELSE 0 END`, y.code);
+  audit(req.user, `academic_year.${role}_changed`, 'academic_year', y.code, { [role]: role === 'current' ? cur : adm }, { [role]: y.code }, req.body.reason);
+  return { ok: true };
+}));
+
+r.delete('/academic-years/:code', ADMIN, wrap((req) => {
+  const y = get('SELECT * FROM academic_years WHERE code = ?', req.params.code);
+  if (!y) throw new AppError(404, 'not_found');
+  if (y.is_current || y.is_admission) throw new AppError(409, 'year_in_use', 'The current or admission year cannot be deleted');
+  if (yearInUse(y.code)) throw new AppError(409, 'year_in_use', 'Applications or enrolments exist for this year');
+  const sections = Number(run('DELETE FROM sections WHERE ay = ?', y.code).changes);
+  run('DELETE FROM windows WHERE ay = ?', y.code);
+  run('DELETE FROM academic_years WHERE code = ?', y.code);
+  audit(req.user, 'academic_year.deleted', 'academic_year', y.code, { ...y, sections }, null, req.body?.reason);
   return { ok: true };
 }));
 

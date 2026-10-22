@@ -2,7 +2,7 @@
 import { all, get, insert, update, tx, parse } from '../db/index.js';
 import {
   setting, nowIso, today, addWorkingDays, workingDaysBetween, haversineKm, cycleOf, admissionAY, currentAY,
-  windowStatus, audit, AppError, isoDate, ayStartYear, slaState, listLabel,
+  windowStatus, audit, AppError, isoDate, ayStartYear, slaState, listLabel, list,
 } from './core.js';
 import { gradeSeats, pickSection, sectionSeats, checkAlerts } from './capacity.js';
 import { maps, transport, sis } from '../mocks/index.js';
@@ -624,13 +624,21 @@ export function renew(user, { childId, addressUnchanged, contactConfirmed, trans
 }
 
 /* ---------------- Leavers (PP-21, SB-08) ---------------- */
+// BR-13: reasons and sub-reasons come from the maintained lists (AD-03). A reason with sub-reasons
+// needs one of them; a reason without sub-reasons (e.g. "Other") needs free text.
+function checkLeaveReason(reason, subreason, note) {
+  if (!list('leave_reason').some((r) => r.code === reason)) throw new AppError(400, 'unknown_leave_reason', 'Leaving reason is not in the maintained list');
+  const subs = list('leave_subreason').filter((x) => x.parent_code === reason);
+  if (subs.length && !subs.some((x) => x.code === subreason)) throw new AppError(400, 'subreason_required');
+  if (!subs.length && !note) throw new AppError(400, 'note_required');
+}
+
 export function requestLeave(user, { childId, reason, subreason, note, leaveDate, destination }) {
   return tx(() => {
     const enr = get(`SELECT * FROM enrolments WHERE child_id = ? AND ay = ? AND status = 'enrolled'`, childId, currentAY().code);
     if (!enr) throw new AppError(409, 'not_enrolled');
     if (!reason || !leaveDate) throw new AppError(400, 'reason_and_date_required');
-    if (reason !== 'other' && !subreason) throw new AppError(400, 'subreason_required');
-    if (reason === 'other' && !note) throw new AppError(400, 'note_required');
+    checkLeaveReason(reason, subreason, note);
     update('enrolments', enr.id, { leave_requested_at: nowIso(), leave_requested_by: user.id, leave_reason: reason, leave_subreason: subreason || null, leave_note: note || null, leave_date: leaveDate, leave_destination: destination || null });
     audit(user, 'enrolment.leave_requested', 'enrolment', enr.id, null, { reason, subreason, leaveDate });
     const child = get('SELECT * FROM children WHERE id = ?', childId);
@@ -650,6 +658,7 @@ export function confirmLeave(user, enrolmentId, patch = {}) {
       leave_note: patch.note ?? enr.leave_note, leave_date: patch.leaveDate || enr.leave_date, leave_destination: patch.destination ?? enr.leave_destination,
     };
     if (!data.leave_reason || !data.leave_date) throw new AppError(400, 'reason_and_date_required');
+    if (patch.reason) checkLeaveReason(data.leave_reason, data.leave_subreason, data.leave_note);
     update('enrolments', enr.id, { ...data, status: 'leaving' });
     audit(user, 'enrolment.leaver_confirmed', 'enrolment', enr.id, { status: enr.status }, { status: 'leaving', ...data });
     const child = get('SELECT * FROM children WHERE id = ?', enr.child_id);
