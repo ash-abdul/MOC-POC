@@ -163,7 +163,7 @@ export const GAPS = [
   ['Ministry sample data (§7)', 'Pending', 'School names, grade structures and catchment boundaries are synthetic until the Ministry provides them at kick-off.'],
   ['Integrations (§8)', 'Simulated', 'UAE PASS, ICP, SIS, maps (geocoding), transport, email and SMS are mocks with real-style interfaces. Map tiles come from OpenStreetMap.'],
   ['Concurrency at scale (CC-05)', 'PoC level', 'Guaranteed by serialised SQLite write transactions on a single node; the target architecture moves this to PostgreSQL row locking.'],
-  ['Deliverables D2 / D3 / D5', 'Partial', 'Data model: server/db/schema.sql. Acceptance scenarios run automatically by tests/scenarios.mjs. Administrator and parent user guides (D3) and the session recording (D5) are not produced yet.'],
+  ['Deliverables D2 / D3 / D5', 'Partial', 'Data model (D2): documented in the "Data model" section of this page and in server/db/schema.sql; screen designs are the working screens themselves. Acceptance scenarios run automatically by tests/scenarios.mjs. Administrator and parent user guides (D3) and the session recording (D5) are not produced yet.'],
   ['Production concerns', 'Out of scope', 'Hosting, security accreditation, data migration, payments, private schools and timetabling are out of scope (§2).'],
 ];
 

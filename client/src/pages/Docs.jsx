@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useI18n } from '../i18n.jsx';
 import { PERSONAS, DATA, REQUIREMENTS, SCENARIOS, GAPS, MOCKS } from './docs/content.js';
+import DataModel from './docs/DataModel.jsx';
 
 const STATUS = {
   done: ['Implemented', 'green'],
@@ -13,7 +14,7 @@ const STATUS = {
 const Status = ({ s }) => <span className={`badge ${STATUS[s][1]}`}>{STATUS[s][0]}</span>;
 
 const TOC = [
-  ['overview', 'Overview'], ['run', 'Running the PoC'], ['architecture', 'Architecture'], ['personas', 'Personas & test identities'],
+  ['overview', 'Overview'], ['run', 'Running the PoC'], ['architecture', 'Architecture'], ['data-model', 'Data model'], ['personas', 'Personas & test identities'],
   ['data', 'Synthetic data'], ['scenarios', 'Acceptance scenarios A1–A16'], ['requirements', 'Requirements traceability'],
   ['gaps', 'Flags: not / partially implemented'], ['mocks', 'Mock services (D4)'], ['next', 'Next phase: real backend'],
 ];
@@ -86,6 +87,8 @@ node tests/scenarios.mjs   # run acceptance scenarios A1–A16 against the API (
         </div>
         <p className="small mt">Source layout: <code>server/db</code> schema &amp; data access · <code>server/services</code> domain logic · <code>server/mocks</code> simulated integrations · <code>server/routes</code> API · <code>server/seed</code> synthetic data · <code>server/i18n</code> English / Arabic resource files · <code>client/src</code> web app · <code>tests/scenarios.mjs</code> acceptance run.</p>
       </section>
+
+      <DataModel />
 
       <section id="personas" className="card">
         <h2>Personas &amp; test identities</h2>
