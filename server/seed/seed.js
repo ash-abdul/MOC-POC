@@ -627,6 +627,8 @@ for (const f of all(`SELECT DISTINCT c.family_id, c.full_name_en, c.full_name_ar
     insert('notifications', { user_id: g.id, channel: 'inapp', template: 'renewal_window_open', subject_en: 'Renewal window is open', subject_ar: 'فترة تجديد التسجيل مفتوحة', body_en: `Please confirm the place of ${f.full_name_en} for next academic year in the portal.`, body_ar: `يرجى تأكيد مقعد ${f.full_name_ar} للعام الدراسي القادم عبر البوابة.`, created_at: '2026-10-01T05:00:00.000Z' });
   }
 }
+// the renewal-window messages for the starting admission year were created above
+insert('audit_log', { at: '2026-10-01T05:00:00.000Z', user_name: 'System', role: 'system', action: 'renewal.window_notified', entity: 'academic_year', entity_id: AY_ADM, new_value: JSON.stringify({ seeded: true }) });
 insert('audit_log', { at: iso(NOW), user_name: 'System', role: 'system', action: 'seed.completed', entity: 'database', new_value: JSON.stringify({ seed }) });
 
 const count = (t, w = '') => get(`SELECT COUNT(*) n FROM ${t} ${w}`).n;

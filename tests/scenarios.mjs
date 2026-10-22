@@ -320,5 +320,25 @@ ok((await call(hessa, 'DELETE', '/admin/academic-years/2028-29')).status === 200
 const acts = (await call(hessa, 'GET', '/admin/audit?limit=300')).data.map((a) => a.action);
 ok(['capacity.grade_config', 'catchment.updated', 'list.item_added', 'academic_year.created', 'academic_year.deleted'].every((a) => acts.includes(a)), 'an audit entry for each change');
 
+console.log('Annual roll-over and renewal into the next academic year');
+const NEXT = '2028-29';
+await call(hessa, 'POST', '/admin/academic-years', { code: NEXT, start_date: '2028-08-21', end_date: '2029-06-29', copy_capacity_from: AY });
+const pv = (await call(hessa, 'GET', `/admin/academic-years/${NEXT}/rollover`)).data;
+ok(pv.source === AY && pv.totals.roll > 1000 && pv.totals.new_school > 0, `preview from ${pv.source}: ${pv.totals.roll} to hold, ${pv.totals.new_school} need a new school, ${pv.totals.graduating} graduating`);
+ok((await call(viewer, 'POST', `/admin/academic-years/${NEXT}/rollover`)).status === 403, 'viewer cannot run the roll-over');
+const rw = (await call(hessa, 'GET', '/admin/windows')).data.windows.find((w) => w.ay === NEXT && w.type === 'renewal');
+await call(hessa, 'PUT', `/admin/windows/${rw.id}`, { open_date: today, close_date: '2028-12-31' });
+await call(hessa, 'POST', `/admin/academic-years/${NEXT}/role`, { role: 'admission' });
+const ro1 = (await call(hessa, 'POST', `/admin/academic-years/${NEXT}/rollover`)).data;
+ok(ro1.created === pv.totals.roll && ro1.notified > 0, `roll-over held ${ro1.created} seats for renewal and sent ${ro1.notified} renewal notifications`);
+const ro2 = (await call(hessa, 'POST', `/admin/academic-years/${NEXT}/rollover`)).data;
+ok(ro2.created === 0 && ro2.totals.already >= ro1.created, 'running the roll-over again adds nothing');
+const mar = (await call(F, 'GET', '/family')).data.children.find((c) => c.id === mariam);
+ok(mar.next_year?.status === 'pending_renewal' && mar.next_year.grade === 'KG2' && mar.can_renew, `Mariam has a KG2 seat held for ${NEXT} and can renew`);
+ok((await call(F, 'GET', '/notifications')).data.some((n) => n.template === 'renewal_window_open'), 'parent notified that the renewal window is open');
+const rnw = await call(F, 'POST', `/family/children/${mariam}/renew`, { addressUnchanged: true, contactConfirmed: true, transportMode: 'dropoff' });
+ok(rnw.data.app?.status === 'accepted' && rnw.data.app.ay === NEXT && rnw.data.app.grade === 'KG2', `renewal for ${NEXT} confirmed`);
+ok((await call(hessa, 'GET', '/admin/audit?action=rollover.completed')).data.length >= 1, 'roll-over recorded in the audit log');
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll scenario checks passed');
 process.exit(failures ? 1 : 0);

@@ -7,6 +7,7 @@ import {
 import { gradeSeats, pickSection, sectionSeats, checkAlerts } from './capacity.js';
 import { maps, transport, sis } from '../mocks/index.js';
 import { notify, familyUsers, schoolStaff, clusterOfficers, ministryAdmins } from './notify.js';
+import { notifyRenewalWindow } from './rollover.js';
 
 export const ACTIVE = ['draft', 'submitted', 'under_review', 'info_requested', 'passed', 'escalated', 'offer_made'];
 export const OPEN = ACTIVE.filter((s) => s !== 'draft');
@@ -691,7 +692,7 @@ export function releaseLeavers() {
 /* ---------------- Scheduled jobs (BR-07, BR-08, SB-06, 4.5 reminders) ---------------- */
 export function runJobs() {
   const t = nowIso();
-  const out = { lapsed: 0, closed: 0, leavers: 0, due_today: 0, overdue: 0, info_reminders: 0 };
+  const out = { lapsed: 0, closed: 0, leavers: 0, due_today: 0, overdue: 0, info_reminders: 0, renewal_notified: notifyRenewalWindow() };
   for (const a of all(`SELECT * FROM applications WHERE status = 'offer_made' AND offer_due_at < ?`, t)) {
     tx(() => {
       endWithRelease(null, a, 'lapsed', 'offer_lapsed', 'offer_not_accepted');

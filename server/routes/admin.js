@@ -6,6 +6,7 @@ import { setGradeConfig, sectionSeats, checkAlerts, schoolGrades } from '../serv
 import * as A from '../services/applications.js';
 import { requireRole, wrap } from './common.js';
 import { exportXlsx } from '../services/excel.js';
+import * as Rollover from '../services/rollover.js';
 
 const r = Router();
 const ADMIN = requireRole('ministry_admin');
@@ -79,7 +80,7 @@ r.put('/settings/:key', ADMIN, wrap((req) => {
 
 /* AD-01 academic years & windows */
 const yearInUse = (code) => get(`SELECT (SELECT COUNT(*) FROM applications WHERE ay = ?) + (SELECT COUNT(*) FROM enrolments WHERE ay = ?) n`, code, code).n;
-r.get('/windows', READ, wrap(() => ({ years: all('SELECT * FROM academic_years ORDER BY code').map((y) => ({ ...y, in_use: yearInUse(y.code) > 0 })), windows: all('SELECT * FROM windows ORDER BY ay, type') })));
+r.get('/windows', READ, wrap(() => ({ years: all('SELECT * FROM academic_years ORDER BY code').map((y) => ({ ...y, in_use: yearInUse(y.code) > 0, has_previous: !!get('SELECT 1 FROM academic_years WHERE code = ?', Rollover.previousYear(y.code)) })), windows: all('SELECT * FROM windows ORDER BY ay, type') })));
 r.put('/windows/:id', ADMIN, wrap((req) => {
   const w = get('SELECT * FROM windows WHERE id = ?', req.params.id);
   if (!w) throw new AppError(404, 'not_found');
@@ -147,6 +148,10 @@ r.post('/academic-years/:code/role', ADMIN, wrap((req) => {
   audit(req.user, `academic_year.${role}_changed`, 'academic_year', y.code, { [role]: role === 'current' ? cur : adm }, { [role]: y.code }, req.body.reason);
   return { ok: true };
 }));
+
+// Annual roll-over into a year: preview, then run (safe to repeat)
+r.get('/academic-years/:code/rollover', READ, wrap((req) => Rollover.preview(req.params.code)));
+r.post('/academic-years/:code/rollover', ADMIN, wrap((req) => Rollover.run(req.user, req.params.code)));
 
 r.delete('/academic-years/:code', ADMIN, wrap((req) => {
   const y = get('SELECT * FROM academic_years WHERE code = ?', req.params.code);

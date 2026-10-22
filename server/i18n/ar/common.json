@@ -159,6 +159,7 @@
  "error.no_family": "لا يوجد حساب أسرة نشط",
  "error.no_preferences": "يرجى اختيار مدرسة واحدة على الأقل",
  "error.no_seat": "لا يوجد مقعد متاح في هذا الصف",
+ "error.no_source_year": "العام الدراسي السابق غير موجود",
  "error.not_found": "غير موجود",
  "error.not_the_approver": "يتخذ قرار هذا التصعيد دور آخر (BR-14)",
  "error.not_your_school": "هذا الطلب ليس في مدرستك",

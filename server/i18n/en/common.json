@@ -159,6 +159,7 @@
  "error.no_family": "No active family account",
  "error.no_preferences": "Please choose at least one school",
  "error.no_seat": "No seat available in this grade",
+ "error.no_source_year": "The previous academic year does not exist",
  "error.not_found": "Not found",
  "error.not_the_approver": "This escalation is decided by another role (BR-14)",
  "error.not_your_school": "This application is not at your school",
