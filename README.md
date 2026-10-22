@@ -3,7 +3,16 @@
 Locally deployed working prototype for the Ministry of Education School Registration Portal PoC
 (requirements: `MoE_Registration_Portal_POC.docx`). Synthetic data only.
 
-## Run
+## Start (one click)
+
+Double-click **`start.command`** in Finder (or run `./start.command` in a terminal). It checks Node.js,
+installs dependencies, creates the test data and builds the web app only when needed, starts the portal
+and opens http://localhost:3000 in your browser. Close the window or press `Ctrl+C` to stop.
+
+- `./start.command --reset` – reset the data to the starting synthetic data first
+- `PORT=3001 ./start.command` – use another port
+
+## Run (manual)
 
 Requires Node.js 22.13 or later (uses the built-in `node:sqlite` driver).
 
