@@ -6,6 +6,7 @@ import { Spinner } from './components/ui.jsx';
 
 import Landing from './pages/Landing.jsx';
 import UaePass from './pages/UaePass.jsx';
+import StaffLogin from './pages/StaffLogin.jsx';
 import Docs from './pages/Docs.jsx';
 import Inbox from './pages/Inbox.jsx';
 import Outbox from './pages/mock/Outbox.jsx';
@@ -65,6 +66,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Layout><Landing /></Layout>} />
       <Route path="/uaepass" element={<UaePass />} />
+      <Route path="/login/:role" element={<Layout><StaffLogin /></Layout>} />
       <Route path="/docs" element={<Layout><Docs /></Layout>} />
       <Route path="/inbox" element={<Guard><Layout><Inbox /></Layout></Guard>} />
       <Route path="/mock/outbox" element={<Guard><Layout><Outbox /></Layout></Guard>} />
