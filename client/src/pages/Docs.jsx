@@ -4,6 +4,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { useI18n } from '../i18n.jsx';
 import { PERSONAS, DATA, REQUIREMENTS, SCENARIOS, GAPS, MOCKS } from './docs/content.js';
 import DataModel from './docs/DataModel.jsx';
+import Configuration from './docs/Configuration.jsx';
 
 const STATUS = {
   done: ['Implemented', 'green'],
@@ -20,6 +21,9 @@ const TOC = [
     ['architecture', 'Architecture'],
     ['data-model', 'Data model', [['dm-diagram', 'Entity relationships'], ['dm-tables', 'Tables'], ['dm-states', 'Status values'], ['dm-decisions', 'Design decisions'], ['dm-target', 'PoC vs target']]],
     ['mocks', 'Mock services (D4)'],
+  ]],
+  ['Configuration', [
+    ['configuration', 'Configuration guide', [['cfg-who', 'Who can do what'], ['cfg-catalogue', 'Configuration catalogue'], ['cfg-rules', 'Business rule settings'], ['cfg-governance', 'How changes are controlled'], ['cfg-not', 'Not configurable yet']]],
   ]],
   ['Requirements coverage', [
     ['scenarios', 'Acceptance scenarios A1–A16'],
@@ -170,6 +174,8 @@ node tests/scenarios.mjs   # run acceptance scenarios A1–A16 against the API (
           <tbody>{MOCKS.map(([a, b, c]) => <tr key={a}><td><b>{a}</b></td><td className="mono small">{b}</td><td className="mono small">{c}</td></tr>)}</tbody>
         </table></div>
       </section>
+
+      <Configuration />
 
       <section id="scenarios" className="card">
         <h2>Acceptance scenarios (Section 10.1)</h2>
