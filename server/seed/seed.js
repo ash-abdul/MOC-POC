@@ -6,7 +6,7 @@ import { open, insert, get, all, run, update, exec, UPLOAD_DIR } from '../db/ind
 import { clearCaches, GRADES, cycleOf, nextGrade, addWorkingDays, haversineKm, pointInGeometry } from '../services/core.js';
 import { sectionSeats, gradeSeats, checkAlerts } from '../services/capacity.js';
 import {
-  SETTINGS, LISTS, TEMPLATES, HOLIDAYS, ACADEMIC_YEARS, WINDOWS, AREAS, SCHOOLS, ROUTES, NAMES, cell, rect, block, SUYOH,
+  SETTINGS, LISTS, TEMPLATES, HOLIDAYS, ACADEMIC_YEARS, WINDOWS, AREAS, SCHOOLS, ROUTES, NAMES, SPARE_CHILDREN, cell, rect, block, SUYOH,
 } from './reference.js';
 
 const T0 = Date.now();
@@ -51,7 +51,7 @@ function identity({ gender, family, birthYear, dob, nationality, uaepass = false
   const fn = first || pick(g === 'M' ? NAMES.male : NAMES.female);
   const fam = family || pick(NAMES.family);
   const mid = father || (first ? null : pick(NAMES.male.filter((m) => m[0] !== fn[0])));
-  const birth = dob || `${birthYear}-${String(ri(1, 12)).padStart(2, '0')}-${String(ri(1, 28)).padStart(2, '0')}`;
+  const birth = dob || `${birthYear ?? ri(1975, 1995)}-${String(ri(1, 12)).padStart(2, '0')}-${String(ri(1, 28)).padStart(2, '0')}`; // adult if no year given
   const p = {
     emirates_id: eid(birth.slice(0, 4), fixedEid), name_en: [fn[0], mid?.[0], fam[0]].filter(Boolean).join(' '), name_ar: [fn[1], mid?.[1], fam[1]].filter(Boolean).join(' '), dob: birth, gender: g,
     nationality: nationality || weighted(NAT), mobile: mobile || `+97150${ri(1000000, 9999999)}`,
@@ -125,8 +125,8 @@ const waitCount = {};
 const user = (o) => insert('users', { lang: 'en', created_at: iso(NOW), ...o });
 const staff = {};
 for (const s of schools) {
-  const reg = identity({ gender: 'F', uaepass: false });
-  const pri = identity({ gender: chance(0.5) ? 'M' : 'F' });
+  const reg = identity({ gender: 'F', uaepass: false, birthYear: ri(1975, 1995) });
+  const pri = identity({ gender: chance(0.5) ? 'M' : 'F', birthYear: ri(1965, 1985) });
   staff[`reg_${s.code}`] = user({ role: 'registrar', name_en: reg.name_en, name_ar: reg.name_ar, email: `registrar.${s.code.toLowerCase()}@moe-poc.ae`, school_id: s.id });
   staff[`pri_${s.code}`] = user({ role: 'principal', name_en: `Dr. ${pri.name_en}`, name_ar: `د. ${pri.name_ar}`, email: `principal.${s.code.toLowerCase()}@moe-poc.ae`, school_id: s.id });
 }
@@ -480,10 +480,16 @@ for (const [first, sch, gr] of [[['Sultan', 'سلطان'], 'SHJ-S07', 'G7'], [['
   run(`UPDATE mock_identities SET name_en = ?, name_ar = ?, nationality = 'AE', gender = ? WHERE emirates_id = (SELECT emirates_id FROM children WHERE id = ?)`, `${first[0]} Al Ketbi`, `${first[1]} الكتبي`, first[0] === 'Sultan' ? 'M' : 'F', e.childId);
 }
 
+// spare children in the identity register for testing "Add a child" (documented on the PoC page)
+for (const [eidv, en, ar, dobv, g, nat, note] of SPARE_CHILDREN) {
+  usedEid.add(eidv);
+  insert('mock_identities', { emirates_id: eidv, name_en: en, name_ar: ar, dob: dobv, gender: g, nationality: nat, eid_expiry: '2030-06-30', uaepass_account: 0, note });
+}
+
 // A6: two applications competing for the last KG1 seat at Al Qasimia Primary (S03)
 const raceKids = [];
 for (const [first, g, home] of [[['Zayed', 'زايد'], 'M', { lat: 25.3455, lng: 55.4105 }], [['Maitha', 'ميثاء'], 'F', { lat: 25.3448, lng: 55.4012 }]]) {
-  const p = identity({ gender: g === 'M' ? 'F' : 'M', family: pick(NAMES.family), nationality: 'AE', uaepass: true });
+  const p = identity({ gender: g === 'M' ? 'F' : 'M', family: pick(NAMES.family), nationality: 'AE', uaepass: true, birthYear: ri(1980, 1994) });
   const F = makeFamily({ home, primary: p, areaName: areaAt(home.lat, home.lng) });
   const ch = makeChild({ familyId: F.fid, grade: 'KG1', ay: AY_ADM, first, family: p.family, gender: g, nationality: 'AE', sod: 0, schooling: 'none' });
   childDocs(F.fid, ch, 'new');
@@ -491,7 +497,7 @@ for (const [first, g, home] of [[['Zayed', 'زايد'], 'M', { lat: 25.3455, lng
 }
 // A7: escalated application waiting at the full Al Suyoh KG1 grade (force registration)
 {
-  const p = identity({ gender: 'M', first: ['Majid', 'ماجد'], family: ['Al Kaabi', 'الكعبي'], nationality: 'AE', uaepass: true });
+  const p = identity({ gender: 'M', first: ['Majid', 'ماجد'], family: ['Al Kaabi', 'الكعبي'], nationality: 'AE', uaepass: true, birthYear: ri(1980, 1994) });
   const home = { lat: 25.2401, lng: 55.5502 };
   const F = makeFamily({ home, primary: p, areaName: ['Al Suyoh', 'السيوح'] });
   const ch = makeChild({ familyId: F.fid, grade: 'KG1', ay: AY_ADM, first: ['Hamdan', 'حمدان'], family: ['Al Kaabi', 'الكعبي'], gender: 'M', nationality: 'AE', schooling: 'none', sod: 1 });
@@ -500,7 +506,7 @@ for (const [first, g, home] of [[['Zayed', 'زايد'], 'M', { lat: 25.3455, lng
 }
 // A8: an application at Al Majaz KG2 (89%) – one offer crosses the 90% threshold
 {
-  const p = identity({ gender: 'F', family: ['Al Shamsi', 'الشامسي'], nationality: 'AE', uaepass: true });
+  const p = identity({ gender: 'F', family: ['Al Shamsi', 'الشامسي'], nationality: 'AE', uaepass: true, birthYear: ri(1980, 1994) });
   const home = { lat: 25.3381, lng: 55.3901 };
   const F = makeFamily({ home, primary: p, areaName: ['Al Majaz', 'المجاز'] });
   const ch = makeChild({ familyId: F.fid, grade: 'KG2', ay: AY_ADM, first: ['Salem', 'سالم'], family: ['Al Shamsi', 'الشامسي'], gender: 'M', nationality: 'AE', schooling: 'private', lastCompleted: 'KG1' });

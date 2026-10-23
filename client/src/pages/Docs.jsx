@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useI18n } from '../i18n.jsx';
-import { PERSONAS, DATA, REQUIREMENTS, SCENARIOS, GAPS, MOCKS } from './docs/content.js';
+import { PERSONAS, DATA, REQUIREMENTS, SCENARIOS, GAPS, MOCKS, SPARE_CHILDREN } from './docs/content.js';
 import DataModel from './docs/DataModel.jsx';
 import Configuration from './docs/Configuration.jsx';
 
@@ -146,6 +146,12 @@ node tests/scenarios.mjs   # run acceptance scenarios A1–A16 against the API (
         <div className="table-wrap"><table className="table">
           <thead><tr><th>Persona</th><th>Role</th><th>Sign-in</th><th>Scenarios</th></tr></thead>
           <tbody>{PERSONAS.map((p) => <tr key={p.who}><td><b>{p.who}</b></td><td>{p.role}</td><td className="mono small">{p.how}</td><td>{p.use}</td></tr>)}</tbody>
+        </table></div>
+        <h3 className="mt" id="spare-children">Spare children for "Add a child"</h3>
+        <p className="small">These Emirates IDs pass the simulated identity check and belong to no family, so any parent can add them (Family → Add child). The grade is the eligible grade for AY 2027-28 with the starting age rules. Once added, a child belongs to that family until the data is reset (<code>npm run seed</code> or <code>./start.command --reset</code>).</p>
+        <div className="table-wrap"><table className="table">
+          <thead><tr><th>Emirates ID</th><th>Child</th><th>Eligible grade</th><th>Nationality</th><th>Use for</th></tr></thead>
+          <tbody>{SPARE_CHILDREN.map(([e, n, g, nat, use]) => <tr key={e}><td className="mono small">{e}</td><td>{n}</td><td>{g}</td><td>{nat}</td><td className="small">{use}</td></tr>)}</tbody>
         </table></div>
       </section>
 

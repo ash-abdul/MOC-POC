@@ -21,6 +21,20 @@ export const PERSONAS = [
   { who: 'Yaqoub Al Shamsi', role: 'Transport Coordinator', how: 'Staff persona', use: 'PP-15, IR-10' },
 ];
 
+// Spare children in the identity register for testing "Add a child" (kept in step with server/seed/reference.js)
+export const SPARE_CHILDREN = [
+  ['784-2023-9100001-1', 'Shamma Khalid Al Nuaimi', 'KG1', 'UAE', 'New to school'],
+  ['784-2023-9100002-2', 'Hamad Saeed Al Kaabi', 'KG1', 'UAE', 'New to school'],
+  ['784-2023-9100003-3', 'Lina Karim Haddad', 'KG1', 'Jordan', 'Non-UAE – passport number needed'],
+  ['784-2022-9100004-4', 'Zayed Majid Al Dhaheri', 'KG2', 'UAE', 'New to school'],
+  ['784-2022-9100010-0', 'Saif Juma Al Mheiri', 'KG2', 'UAE', 'Tick "student of determination"'],
+  ['784-2021-9100005-5', 'Mariam Adel Saleh', 'Grade 1', 'Egypt', 'Non-UAE – passport number needed'],
+  ['784-2019-9100006-6', 'Rashid Hamdan Al Shamsi', 'Grade 3', 'UAE', 'From a UAE private school, last completed Grade 2'],
+  ['784-2017-9100007-7', 'Maitha Sultan Al Falasi', 'Grade 5', 'UAE', 'From a UAE private school, last completed Grade 4'],
+  ['784-2016-9100008-8', 'Omar Tariq Ibrahim', 'Grade 6', 'Pakistan', 'From outside the UAE, last completed Grade 5'],
+  ['784-2013-9100009-9', 'Noura Ali Al Mazrouei', 'Grade 9', 'UAE', 'From an MoE school in another emirate, last completed Grade 8'],
+];
+
 export const DATA = [
   ['Schools', '12 schools in Sharjah Cluster 1 covering KG, Cycle 1, 2 and 3, each with sections and capacities', 'done'],
   ['Catchments', 'Map boundaries for the 12 schools; Al Suyoh is an area served by no school with a free seat (KG1 and G1 full)', 'done'],

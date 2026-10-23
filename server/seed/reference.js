@@ -257,3 +257,19 @@ export const NAMES = {
   family: [['Al Mansoori', 'المنصوري'], ['Al Hashimi', 'الهاشمي'], ['Al Suwaidi', 'السويدي'], ['Al Ketbi', 'الكتبي'], ['Al Zaabi', 'الزعابي'], ['Al Nuaimi', 'النعيمي'], ['Al Shamsi', 'الشامسي'], ['Al Marzouqi', 'المرزوقي'], ['Al Ali', 'العلي'], ['Al Qasimi', 'القاسمي'], ['Al Mazrouei', 'المزروعي'], ['Al Dhaheri', 'الظاهري'], ['Al Blooshi', 'البلوشي'], ['Al Hammadi', 'الحمادي'], ['Al Kaabi', 'الكعبي'], ['Al Falasi', 'الفلاسي'], ['Al Tunaiji', 'الطنيجي'], ['Al Naqbi', 'النقبي'], ['Haddad', 'حداد'], ['Khoury', 'خوري'], ['Saleh', 'صالح'], ['Mahmoud', 'محمود'], ['Ibrahim', 'إبراهيم'], ['Rahman', 'رحمن'], ['Hussein', 'حسين'], ['Nasser', 'ناصر'],
     ['Al Mheiri', 'المهيري'], ['Al Shehhi', 'الشحي'], ['Al Romaithi', 'الرميثي'], ['Al Khoori', 'الخوري'], ['Al Rashidi', 'الراشدي'], ['Al Hosani', 'الحوسني'], ['Al Mulla', 'الملا'], ['Al Owais', 'العويس'], ['Al Junaibi', 'الجنيبي'], ['Al Sayegh', 'الصايغ'], ['Al Amiri', 'العامري'], ['Al Matrooshi', 'المطروشي'], ['Al Hajeri', 'الهاجري'], ['Al Ghafli', 'الغفلي'], ['Al Zarooni', 'الزرعوني'], ['Al Sharif', 'الشريف'], ['Darwish', 'درويش'], ['Abdallah', 'عبدالله'], ['Al Masri', 'المصري'], ['Qasem', 'قاسم'], ['Haidar', 'حيدر']],
 };
+
+// Spare children in the identity register (not in any family) for testing "Add a child".
+// Grade shown is the eligible grade for AY 2027-28 with the starting age rules.
+// [Emirates ID, name EN, name AR, date of birth, gender, nationality, note]
+export const SPARE_CHILDREN = [
+  ['784-2023-9100001-1', 'Shamma Khalid Al Nuaimi', 'شما خالد النعيمي', '2023-03-14', 'F', 'AE', 'Spare child – KG1, new to school'],
+  ['784-2023-9100002-2', 'Hamad Saeed Al Kaabi', 'حمد سعيد الكعبي', '2023-08-21', 'M', 'AE', 'Spare child – KG1, new to school'],
+  ['784-2023-9100003-3', 'Lina Karim Haddad', 'لينا كريم حداد', '2023-01-30', 'F', 'JO', 'Spare child – KG1, non-UAE (passport needed)'],
+  ['784-2022-9100004-4', 'Zayed Majid Al Dhaheri', 'زايد ماجد الظاهري', '2022-06-05', 'M', 'AE', 'Spare child – KG2'],
+  ['784-2022-9100010-0', 'Saif Juma Al Mheiri', 'سيف جمعة المهيري', '2022-12-01', 'M', 'AE', 'Spare child – KG2, student of determination'],
+  ['784-2021-9100005-5', 'Mariam Adel Saleh', 'مريم عادل صالح', '2021-09-12', 'F', 'EG', 'Spare child – Grade 1, non-UAE (passport needed)'],
+  ['784-2019-9100006-6', 'Rashid Hamdan Al Shamsi', 'راشد حمدان الشامسي', '2019-04-18', 'M', 'AE', 'Spare child – Grade 3, from a private school (last completed G2)'],
+  ['784-2017-9100007-7', 'Maitha Sultan Al Falasi', 'ميثاء سلطان الفلاسي', '2017-11-02', 'F', 'AE', 'Spare child – Grade 5, from a private school (last completed G4)'],
+  ['784-2016-9100008-8', 'Omar Tariq Ibrahim', 'عمر طارق إبراهيم', '2016-02-27', 'M', 'PK', 'Spare child – Grade 6, from abroad (last completed G5)'],
+  ['784-2013-9100009-9', 'Noura Ali Al Mazrouei', 'نورة علي المزروعي', '2013-07-07', 'F', 'AE', 'Spare child – Grade 9, from another emirate (last completed G8)'],
+];
