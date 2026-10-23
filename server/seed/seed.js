@@ -44,19 +44,22 @@ function eid(year, fixed) {
   return e;
 }
 const NAT = [['AE', 62], ['EG', 7], ['JO', 6], ['SY', 6], ['SD', 4], ['YE', 4], ['OM', 3], ['IN', 3], ['PK', 2], ['LB', 2], ['PS', 1]];
-function identity({ gender, family, birthYear, dob, nationality, uaepass = false, fixedEid, first, note, mobile, email }) {
+// Names follow the usual Emirati pattern: first name, father's first name, family name.
+// People created with a fixed first name (the named demo personas) keep their short name unless a father is given.
+function identity({ gender, family, birthYear, dob, nationality, uaepass = false, fixedEid, first, father, note, mobile, email }) {
   const g = gender || (chance(0.5) ? 'M' : 'F');
   const fn = first || pick(g === 'M' ? NAMES.male : NAMES.female);
   const fam = family || pick(NAMES.family);
+  const mid = father || (first ? null : pick(NAMES.male.filter((m) => m[0] !== fn[0])));
   const birth = dob || `${birthYear}-${String(ri(1, 12)).padStart(2, '0')}-${String(ri(1, 28)).padStart(2, '0')}`;
   const p = {
-    emirates_id: eid(birth.slice(0, 4), fixedEid), name_en: `${fn[0]} ${fam[0]}`, name_ar: `${fn[1]} ${fam[1]}`, dob: birth, gender: g,
+    emirates_id: eid(birth.slice(0, 4), fixedEid), name_en: [fn[0], mid?.[0], fam[0]].filter(Boolean).join(' '), name_ar: [fn[1], mid?.[1], fam[1]].filter(Boolean).join(' '), dob: birth, gender: g,
     nationality: nationality || weighted(NAT), mobile: mobile || `+97150${ri(1000000, 9999999)}`,
     email: email || `${fn[0].toLowerCase()}.${fam[0].toLowerCase().replace(/[^a-z]/g, '')}${ri(1, 999)}@test.moe-poc.ae`,
     eid_expiry: `${ri(2027, 2030)}-${String(ri(1, 12)).padStart(2, '0')}-15`, uaepass_account: uaepass ? 1 : 0, note: note || null,
   };
   insert('mock_identities', p);
-  return { ...p, first: fn, family: fam };
+  return { ...p, first: fn, father: mid, family: fam };
 }
 
 /* ---------- reference data ---------- */
@@ -158,11 +161,11 @@ function doc(o) {
 }
 
 /* ---------- children helper ---------- */
-function makeChild({ familyId = null, family, grade, ay = AY_CUR, nationality, sod, dob, first, gender, fixedEid, schooling, lastCompleted }) {
+function makeChild({ familyId = null, family, father, grade, ay = AY_CUR, nationality, sod, dob, first, gender, fixedEid, schooling, lastCompleted }) {
   // age on 31 Dec of AY start year: KG1 = 4 ... G12 = 17
   const startYear = Number(ay.slice(0, 4));
   const birthYear = startYear - (4 + GRADES.indexOf(grade));
-  const p = identity({ family, birthYear, dob, nationality, first, gender, fixedEid });
+  const p = identity({ family, father, birthYear, dob, nationality, first, gender, fixedEid });
   const id = insert('children', {
     family_id: familyId, emirates_id: p.emirates_id, full_name_en: p.name_en, full_name_ar: p.name_ar, dob: p.dob, gender: p.gender,
     nationality: p.nationality, passport_no: p.nationality === 'AE' ? null : `P${ri(1000000, 9999999)}`,
@@ -409,14 +412,19 @@ const areaAt = (lat, lng) => {
   const a = AREAS.find(([r, c]) => pointInGeometry(lat, lng, rect(cell(r, c))));
   return a ? [a[2], a[3]] : ['Al Suyoh', 'السيوح'];
 };
-function attachEnrolledChild(fid, family, home) {
+function attachEnrolledChild(fid, family, home, father) {
   // move a background current student into this family (sibling / renewal / leaver scenarios)
   const options = enrolCurrent.filter((e) => !e.taken && e.school.code !== 'SHJ-S12' && pointInGeometry(home.lat, home.lng, e.school.geom) && get('SELECT status FROM enrolments WHERE id = ?', e.eId).status === 'enrolled');
   const e = options.length ? pick(options) : null;
   if (!e) return null;
   e.taken = true;
-  const p = identity({ family, birthYear: 2026 - (4 + GRADES.indexOf(e.grade)) });
-  run('UPDATE children SET family_id = ?, full_name_en = ?, full_name_ar = ? WHERE id = ?', fid, p.name_en, p.name_ar, e.childId);
+  // rename the student into this family and keep the identity register (ICP / UAE PASS mock) in step
+  const kid = get('SELECT * FROM children WHERE id = ?', e.childId);
+  const fn = pick(kid.gender === 'M' ? NAMES.male : NAMES.female);
+  const mid = father || pick(NAMES.male);
+  const name_en = `${fn[0]} ${mid[0]} ${family[0]}`, name_ar = `${fn[1]} ${mid[1]} ${family[1]}`;
+  run('UPDATE children SET family_id = ?, full_name_en = ?, full_name_ar = ? WHERE id = ?', fid, name_en, name_ar, e.childId);
+  run('UPDATE mock_identities SET name_en = ?, name_ar = ? WHERE emirates_id = ?', name_en, name_ar, kid.emirates_id);
   const ch = get('SELECT * FROM children WHERE id = ?', e.childId);
   doc({ family_id: fid, child_id: ch.id, doc_type: 'child_eid', expiry_date: '2029-05-01' });
   return { ...e, child: ch };
@@ -437,7 +445,7 @@ const H = makeFamily({ home: nahdaHome, primary: ahmed, second: huda, areaName: 
 const omarE = enrolCurrent.find((e) => e.school.code === 'SHJ-S04' && e.grade === 'G3' && !e.taken);
 omarE.taken = true;
 run(`UPDATE children SET family_id = ?, full_name_en = 'Omar Al Hashimi', full_name_ar = 'عمر الهاشمي', gender = 'M', nationality = 'AE', passport_no = NULL WHERE id = ?`, H.fid, omarE.childId);
-run(`UPDATE mock_identities SET name_en = 'Omar Al Hashimi', name_ar = 'عمر الهاشمي' WHERE emirates_id = (SELECT emirates_id FROM children WHERE id = ?)`, omarE.childId);
+run(`UPDATE mock_identities SET name_en = 'Omar Al Hashimi', name_ar = 'عمر الهاشمي', gender = 'M', nationality = 'AE' WHERE emirates_id = (SELECT emirates_id FROM children WHERE id = ?)`, omarE.childId);
 if (get('SELECT status FROM enrolments WHERE id = ?', pendingByChild.get(omarE.childId))?.status !== 'pending_renewal') update('enrolments', pendingByChild.get(omarE.childId), { status: 'pending_renewal' });
 // Layla: KG1 application submitted to Al Majaz KG (S01) – school offers, parent accepts (A2)
 const layla = makeChild({ familyId: H.fid, grade: 'KG1', ay: AY_ADM, first: ['Layla', 'ليلى'], family: ['Al Hashimi', 'الهاشمي'], gender: 'F', nationality: 'AE', sod: 0, fixedEid: '784-2023-4444444-4', dob: '2023-03-08', schooling: 'none' });
@@ -469,6 +477,7 @@ for (const [first, sch, gr] of [[['Sultan', 'سلطان'], 'SHJ-S07', 'G7'], [['
   const e = enrolCurrent.find((x) => x.school.code === sch && x.grade === gr && !x.taken && get('SELECT status FROM enrolments WHERE id = ?', x.eId).status === 'enrolled');
   e.taken = true;
   run(`UPDATE children SET family_id = ?, full_name_en = ?, full_name_ar = ?, nationality = 'AE', passport_no = NULL, gender = ? WHERE id = ?`, KT.fid, `${first[0]} Al Ketbi`, `${first[1]} الكتبي`, first[0] === 'Sultan' ? 'M' : 'F', e.childId);
+  run(`UPDATE mock_identities SET name_en = ?, name_ar = ?, nationality = 'AE', gender = ? WHERE emirates_id = (SELECT emirates_id FROM children WHERE id = ?)`, `${first[0]} Al Ketbi`, `${first[1]} الكتبي`, first[0] === 'Sultan' ? 'M' : 'F', e.childId);
 }
 
 // A6: two applications competing for the last KG1 seat at Al Qasimia Primary (S03)
@@ -476,7 +485,7 @@ const raceKids = [];
 for (const [first, g, home] of [[['Zayed', 'زايد'], 'M', { lat: 25.3455, lng: 55.4105 }], [['Maitha', 'ميثاء'], 'F', { lat: 25.3448, lng: 55.4012 }]]) {
   const p = identity({ gender: g === 'M' ? 'F' : 'M', family: pick(NAMES.family), nationality: 'AE', uaepass: true });
   const F = makeFamily({ home, primary: p, areaName: areaAt(home.lat, home.lng) });
-  const ch = makeChild({ familyId: F.fid, grade: 'KG1', ay: AY_ADM, first, family: [p.name_en.split(' ').slice(1).join(' '), p.name_ar.split(' ').slice(1).join(' ')], gender: g, nationality: 'AE', sod: 0, schooling: 'none' });
+  const ch = makeChild({ familyId: F.fid, grade: 'KG1', ay: AY_ADM, first, family: p.family, gender: g, nationality: 'AE', sod: 0, schooling: 'none' });
   childDocs(F.fid, ch, 'new');
   raceKids.push(createApp({ child: ch, familyId: F.fid, ay: AY_ADM, grade: 'KG1', pathway: 'new', status: 'under_review', submitted: new Date(NOW.getTime() - (30 - raceKids.length) * 3600000), home, prefs: [S['SHJ-S03'].id, S['SHJ-S01'].id], transportMode: 'dropoff', volume: 0 }));
 }
@@ -514,20 +523,22 @@ while (famCount < 200) {
   const sole = chance(0.06);
   const p2 = sole ? null : identity({ gender: p1.gender === 'M' ? 'F' : 'M', family: famName, nationality: nat, uaepass: true, birthYear: ri(1975, 1995) });
   const F = makeFamily({ home, primary: p1, second: p2, sole, areaName: areaAt(home.lat, home.lng) });
+  // children carry their father's first name (or a deceased / absent father's name for sole custody)
+  const father = p1.gender === 'M' ? p1.first : p2?.gender === 'M' ? p2.first : pick(NAMES.male);
   famCount++;
   const kids = childCount < 354 ? (famCount % 3 === 0 ? 3 : famCount % 3 === 1 ? 2 : 1) : 1;
   for (let k = 0; k < kids && childCount < 354; k++) {
     childCount++;
     if (k === 0 && chance(0.45)) {
       // current student – renewal pending, some already renewed, some leaving requests
-      const e = attachEnrolledChild(F.fid, famName, home);
+      const e = attachEnrolledChild(F.fid, famName, home, father);
       if (e && chance(0.2)) pendingLeaveRequests.push({ e, fid: F.fid, puid: F.puid });
       if (e) continue;
     }
     const grade = weighted(GRADE_MIX);
     const pathway = weighted(PATH_MIX(grade));
     const options = schoolsFor(home.lat, home.lng, grade).filter((s) => s.code !== 'SHJ-S12');
-    const ch = makeChild({ familyId: F.fid, family: famName, grade, ay: AY_ADM, nationality: nat, sod: chance(0.07) ? 1 : 0, schooling: pathway === 'new' ? 'none' : pathway, lastCompleted: pathway === 'new' ? null : GRADES[GRADES.indexOf(grade) - 1] || null });
+    const ch = makeChild({ familyId: F.fid, family: famName, father, grade, ay: AY_ADM, nationality: nat, sod: chance(0.07) ? 1 : 0, schooling: pathway === 'new' ? 'none' : pathway, lastCompleted: pathway === 'new' ? null : GRADES[GRADES.indexOf(grade) - 1] || null });
     childDocs(F.fid, ch, pathway);
     if (!options.length) continue;
     const prefs = options.sort(() => rnd() - 0.5).slice(0, ri(1, 3)).map((s) => s.id);
