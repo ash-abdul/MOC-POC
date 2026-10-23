@@ -71,7 +71,7 @@ export default function UaePass() {
       <div className="small muted" style={{ marginBottom: 6 }}>{t('uaepass.test_accounts')}</div>
       <div style={{ maxHeight: 340, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
         {list.map((a) => (
-          <button key={a.emirates_id} onClick={() => setChosen(a)} style={{ display: 'block', width: '100%', textAlign: 'start', background: a.note ? 'var(--gold-50)' : '#fff', border: 0, borderBottom: '1px solid var(--border)', padding: '8px 10px', cursor: 'pointer', font: 'inherit' }}>
+          <button key={a.emirates_id} onClick={() => setChosen(a)} style={{ display: 'block', width: '100%', textAlign: 'start', background: a.note ? 'var(--gold-50)' : '#fff', border: 0, borderBottom: '1px solid var(--border)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', color: 'var(--text)' }}>
             <b>{L(a)}</b> <span className="mono small muted">{a.emirates_id}</span>
             {a.note && <div className="small" style={{ color: 'var(--gold-800)' }}>{a.note}</div>}
           </button>

@@ -57,6 +57,7 @@ html, body { margin: 0; }
 body { font-family: var(--font-body); color: var(--text); background: var(--page); font-size: 14.5px; line-height: 1.55; }
 h1, h2, h3, h4 { font-family: var(--font-head); color: var(--black-900); margin: 0 0 .5em; line-height: 1.3; font-weight: 600; }
 h1 { font-size: 1.6rem; } h2 { font-size: 1.25rem; } h3 { font-size: 1.05rem; } h4 { font-size: .95rem; }
+button { color: inherit; } /* iOS Safari otherwise colours plain button text blue */
 a { color: var(--gold-700); text-decoration: none; }
 a:hover { text-decoration: underline; }
 p { margin: 0 0 .8em; }
