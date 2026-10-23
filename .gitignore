@@ -3,3 +3,6 @@ client/dist
 server/data/*.db*
 server/data/uploads
 .DS_Store
+# Ministry requirements document and Word lock files are kept out of the repository
+MoE_Registration_Portal_POC.docx
+~$*

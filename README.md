@@ -1,7 +1,7 @@
 # MoE School Registration Portal – Proof of Concept
 
 Locally deployed working prototype for the Ministry of Education School Registration Portal PoC
-(requirements: `MoE_Registration_Portal_POC.docx`). Synthetic data only.
+(requirements: the Ministry's `MoE_Registration_Portal_POC.docx`, kept out of this repository). Synthetic data only.
 
 ## Start (one click)
 
