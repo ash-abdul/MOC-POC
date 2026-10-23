@@ -24,6 +24,8 @@ import Documents from './pages/parent/Documents.jsx';
 import GuardianLink from './pages/parent/GuardianLink.jsx';
 // back office
 import Queue from './pages/staff/Queue.jsx';
+import Students from './pages/staff/Students.jsx';
+import StudentDetail from './pages/staff/StudentDetail.jsx';
 import AppReview from './pages/staff/AppReview.jsx';
 import SchoolCapacity from './pages/staff/SchoolCapacity.jsx';
 import Leavers from './pages/staff/Leavers.jsx';
@@ -84,6 +86,8 @@ export default function App() {
       <Route path="/parent/applications/:id/offer-letter" element={<Guard roles={P}><OfferLetter /></Guard>} />
 
       <Route path="/school/queue" element={<Guard roles={SCHOOL}><Layout><Queue /></Layout></Guard>} />
+      <Route path="/school/students" element={<Guard roles={SCHOOL}><Layout><Students /></Layout></Guard>} />
+      <Route path="/school/students/:id" element={<Guard roles={SCHOOL}><Layout><StudentDetail /></Layout></Guard>} />
       <Route path="/school/applications/:id" element={<Guard roles={[...SCHOOL, 'transport']}><Layout><AppReview /></Layout></Guard>} />
       <Route path="/school/capacity" element={<Guard roles={['registrar', 'principal']}><Layout><SchoolCapacity /></Layout></Guard>} />
       <Route path="/school/leavers" element={<Guard roles={['registrar', 'principal', 'cluster_officer']}><Layout><Leavers /></Layout></Guard>} />

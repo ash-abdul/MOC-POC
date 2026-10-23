@@ -320,6 +320,18 @@ ok((await call(hessa, 'DELETE', '/admin/academic-years/2028-29')).status === 200
 const acts = (await call(hessa, 'GET', '/admin/audit?limit=300')).data.map((a) => a.action);
 ok(['capacity.grade_config', 'catchment.updated', 'list.item_added', 'academic_year.created', 'academic_year.deleted'].every((a) => acts.includes(a)), 'an audit entry for each change');
 
+console.log('Student directory');
+const R4s = await staff((p) => p.role === 'registrar' && p.school_code === 'SHJ-S04');
+const sd = (await call(R4s, 'GET', '/school/students?q=Omar%20Al%20Hashimi')).data;
+const omarRow = sd.rows?.find((r) => r.full_name_en === 'Omar Al Hashimi');
+ok(omarRow && omarRow.grade === 'G3' && omarRow.next_year, `registrar finds Omar Al Hashimi (G3, next year: ${omarRow?.next_year})`, sd);
+const sdet = await call(R4s, 'GET', `/school/students/${omarRow.id}`);
+ok(sdet.status === 200 && sdet.data.guardians.some((g) => g.full_name_en === 'Ahmed Al Hashimi') && sdet.data.history.length >= 1, 'student detail shows guardians and enrolment history');
+ok((await call(R1, 'GET', `/school/students/${omarRow.id}`)).status === 403, "another school's registrar cannot open the student");
+ok((await call(R1, 'GET', '/school/students?q=Omar%20Al%20Hashimi')).data.rows.length === 0, "another school's registrar does not find the student");
+ok((await call(CO, 'GET', `/school/students/${omarRow.id}`)).status === 200, 'cluster officer can open students in the cluster');
+ok((await call(ahmed, 'GET', '/school/students')).status === 403, 'parents cannot use the student directory');
+
 console.log('Annual roll-over and renewal into the next academic year');
 const NEXT = '2028-29';
 await call(hessa, 'POST', '/admin/academic-years', { code: NEXT, start_date: '2028-08-21', end_date: '2029-06-29', copy_capacity_from: AY });

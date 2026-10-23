@@ -13,6 +13,7 @@ export const NAV = [
   ['group', 'nav.group.school', ['registrar', 'principal', 'cluster_officer', 'ministry_admin']],
   ['/cluster', 'nav.cluster', ['cluster_officer', 'ministry_admin']],
   ['/school/queue', 'nav.queue', ['registrar', 'principal', 'cluster_officer', 'ministry_admin']],
+  ['/school/students', 'nav.students', ['registrar', 'principal', 'cluster_officer', 'ministry_admin']],
   ['/school/capacity', 'nav.school_capacity', ['registrar', 'principal']],
   ['/school/leavers', 'nav.leavers', ['registrar', 'principal', 'cluster_officer']],
   ['/transport', 'nav.transport', ['transport']],

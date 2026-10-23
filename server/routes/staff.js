@@ -3,7 +3,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { all, get, parse, UPLOAD_DIR } from '../db/index.js';
-import { AppError, admissionAY, currentAY, CYCLES, slaState, setting, today } from '../services/core.js';
+import { AppError, admissionAY, currentAY, CYCLES, GRADES, slaState, setting, today } from '../services/core.js';
 import * as A from '../services/applications.js';
 import { schoolSummary, sectionSeats } from '../services/capacity.js';
 import { requireAuth, requireRole, canSeeApp, wrap } from './common.js';
@@ -132,6 +132,75 @@ r.get('/students', requireRole(...SCHOOL), wrap((req) => {
   return all(`SELECT e.id enrolment_id, e.grade, sec.name section, c.full_name_en, c.full_name_ar, c.emirates_id FROM enrolments e JOIN children c ON c.id = e.child_id LEFT JOIN sections sec ON sec.id = e.section_id
                WHERE e.school_id = ? AND e.ay = ? AND e.status = 'enrolled' AND (c.full_name_en LIKE ? OR c.full_name_ar LIKE ? OR c.emirates_id LIKE ?) ORDER BY c.full_name_en LIMIT 20`, req.user.school_id, currentAY().code, q, q, q);
 }));
+/* Student directory (addition to SB-01..SB-09): students enrolled this year, with their next-year status.
+ * Scope: school staff see their own school, cluster officers their cluster, Ministry users every school. */
+const DIRECTORY = ['registrar', 'principal', 'cluster_officer', 'ministry_admin', 'ministry_viewer'];
+function directoryScope(user, w, p) {
+  if (SCHOOL.includes(user.role)) { w.push('e.school_id = ?'); p.push(user.school_id); }
+  if (user.role === 'cluster_officer') { w.push('s.cluster_id = ?'); p.push(user.cluster_id); }
+}
+// What happens to the student next year: renewed, awaiting renewal, leaving, transferring, not returning, moving on, graduating
+function nextYearStatus(row) {
+  if (row.status === 'leaving' || row.leave_requested_at) return 'leaving';
+  if (row.next_status === 'enrolled') return row.next_school_id === row.school_id ? 'renewed' : 'transferring';
+  if (row.next_status === 'pending_renewal') return 'awaiting';
+  if (row.next_status === 'left') return 'not_returning';
+  return row.grade === 'G12' ? 'graduating' : 'moving_on';
+}
+const STUDENT_FROM = `FROM enrolments e JOIN children c ON c.id = e.child_id JOIN schools s ON s.id = e.school_id LEFT JOIN sections sec ON sec.id = e.section_id
+  LEFT JOIN enrolments n ON n.id = (SELECT MAX(id) FROM enrolments x WHERE x.child_id = e.child_id AND x.ay = ?)`;
+
+r.get('/school/students', requireRole(...DIRECTORY), wrap((req) => {
+  const q = req.query, cur = currentAY().code, next = admissionAY().code;
+  const w = ['e.ay = ?', `e.status IN ('enrolled','leaving')`], p = [next, cur];
+  directoryScope(req.user, w, p);
+  if (q.school) { w.push('e.school_id = ?'); p.push(Number(q.school)); }
+  if (q.grade) { w.push('e.grade = ?'); p.push(q.grade); }
+  if (q.section) { w.push('sec.name = ?'); p.push(q.section); }
+  if (q.q) { w.push('(c.full_name_en LIKE ? OR c.full_name_ar LIKE ? OR c.emirates_id LIKE ?)'); p.push(...Array(3).fill(`%${q.q.trim()}%`)); }
+  const rows = all(`SELECT c.id, c.full_name_en, c.full_name_ar, c.emirates_id, c.gender, c.nationality, c.sod, c.family_id,
+                           e.id enrolment_id, e.school_id, e.grade, e.status, e.leave_requested_at, e.leave_date, sec.name section, s.name_en school_en, s.name_ar school_ar,
+                           n.status next_status, n.grade next_grade, n.school_id next_school_id
+                      ${STUDENT_FROM} WHERE ${w.join(' AND ')}`, ...p)
+    .map((r) => ({ ...r, next_year: nextYearStatus(r) }))
+    // KG1, KG2, Grade 1 … Grade 12 (not alphabetical), then section and name
+    .sort((a, b) => GRADES.indexOf(a.grade) - GRADES.indexOf(b.grade) || String(a.section).localeCompare(String(b.section)) || a.full_name_en.localeCompare(b.full_name_en));
+  const counts = {};
+  for (const r of rows) counts[r.next_year] = (counts[r.next_year] || 0) + 1;
+  const filtered = q.next ? rows.filter((r) => r.next_year === q.next) : rows;
+  const limit = 300;
+  return { total: filtered.length, all: rows.length, counts, rows: filtered.slice(0, limit), limited: filtered.length > limit, current_ay: cur, next_ay: next };
+}));
+
+r.get('/school/students/:childId', requireRole(...DIRECTORY), wrap((req) => {
+  const id = Number(req.params.childId);
+  const child = get('SELECT * FROM children WHERE id = ?', id);
+  if (!child) throw new AppError(404, 'not_found');
+  const enrolments = all(`SELECT e.*, s.name_en school_en, s.name_ar school_ar, s.cluster_id, sec.name section FROM enrolments e JOIN schools s ON s.id = e.school_id
+                           LEFT JOIN sections sec ON sec.id = e.section_id WHERE e.child_id = ? ORDER BY e.ay DESC, e.id DESC`, id);
+  const apps = all(`SELECT a.id, a.ref, a.type, a.pathway, a.ay, a.grade, a.status, a.submitted_at, a.preferences, a.current_school_id, s.name_en school_en, s.name_ar school_ar, s.cluster_id
+                      FROM applications a LEFT JOIN schools s ON s.id = a.current_school_id WHERE a.child_id = ? AND a.status != 'draft' ORDER BY a.id DESC`, id);
+  // TR-02: school staff only for students placed at, or applying to, their school; cluster officers within their cluster
+  const u = req.user;
+  const ok = SCHOOL.includes(u.role)
+    ? enrolments.some((e) => e.school_id === u.school_id) || apps.some((a) => a.current_school_id === u.school_id || parse(a.preferences, []).includes(u.school_id))
+    : u.role === 'cluster_officer' ? enrolments.some((e) => e.cluster_id === u.cluster_id) || apps.some((a) => a.cluster_id === u.cluster_id) : true;
+  if (!ok) throw new AppError(403, 'not_your_school');
+  const cur = currentAY().code, next = admissionAY().code;
+  const current = enrolments.find((e) => e.ay === cur && ['enrolled', 'leaving', 'left'].includes(e.status)) || null;
+  const nextE = enrolments.find((e) => e.ay === next) || null;
+  const family = child.family_id ? get('SELECT * FROM families WHERE id = ?', child.family_id) : null;
+  const guardians = child.family_id ? all(`SELECT id, full_name_en, full_name_ar, emirates_id, relationship, mobile, email, nationality, is_primary, status, preferred_channel FROM guardians WHERE family_id = ? ORDER BY is_primary DESC, id`, child.family_id) : [];
+  const siblings = child.family_id ? all(`SELECT c.id, c.full_name_en, c.full_name_ar, e.grade, s.name_en school_en, s.name_ar school_ar FROM children c
+      LEFT JOIN enrolments e ON e.child_id = c.id AND e.ay = ? AND e.status IN ('enrolled','leaving') LEFT JOIN schools s ON s.id = e.school_id
+      WHERE c.family_id = ? AND c.id != ?`, cur, child.family_id, id) : [];
+  const next_year = current ? nextYearStatus({ ...current, next_status: nextE?.status, next_school_id: nextE?.school_id }) : null;
+  return {
+    child, current, next: nextE, next_year, family, guardians, siblings, current_ay: cur, next_ay: next,
+    history: enrolments, applications: apps.map(({ preferences, ...a }) => a),
+  };
+}));
+
 r.post('/leavers/:enrolmentId/confirm', requireRole(...SCHOOL), wrap((req) => A.confirmLeave(req.user, Number(req.params.enrolmentId), req.body)));
 
 /* SB-07 cluster view */
