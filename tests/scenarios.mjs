@@ -331,6 +331,10 @@ ok((await call(R1, 'GET', `/school/students/${omarRow.id}`)).status === 403, "an
 ok((await call(R1, 'GET', '/school/students?q=Omar%20Al%20Hashimi')).data.rows.length === 0, "another school's registrar does not find the student");
 ok((await call(CO, 'GET', `/school/students/${omarRow.id}`)).status === 200, 'cluster officer can open students in the cluster');
 ok((await call(ahmed, 'GET', '/school/students')).status === 403, 'parents cannot use the student directory');
+const joinRow = (await call(R1, 'GET', '/school/students?q=Mariam%20Al%20Mansoori')).data.rows?.find((r) => r.full_name_en === 'Mariam Al Mansoori');
+ok(joinRow?.next_year === 'joining' && joinRow.grade === 'KG1', `a child accepted for next year appears as joining (${joinRow?.next_year} ${joinRow?.grade})`);
+const joinDet = (await call(R1, 'GET', `/school/students/${joinRow?.id}`)).data;
+ok(joinDet.next_year === 'joining' && !joinDet.current && joinDet.next?.grade === 'KG1', 'their record shows no placement this year and the place next year');
 
 console.log('Annual roll-over and renewal into the next academic year');
 const NEXT = '2028-29';

@@ -6,12 +6,12 @@ import { useAuth } from '../../auth.jsx';
 import { useI18n } from '../../i18n.jsx';
 import { useAsync, PageHead, Loader, DataTable, Stat } from '../../components/ui.jsx';
 
-export const NEXT_COLOR = { renewed: 'green', awaiting: 'amber', leaving: 'red', transferring: 'blue', not_returning: '', moving_on: 'gold', graduating: '' };
+export const NEXT_COLOR = { joining: 'gold', renewed: 'green', awaiting: 'amber', leaving: 'red', transferring: 'blue', not_returning: '', moving_on: '', graduating: '' };
 export const NextBadge = ({ s }) => {
   const { t } = useI18n();
   return s ? <span className={`badge ${NEXT_COLOR[s] ?? ''}`}>{t(`bo.students.next.${s}`)}</span> : null;
 };
-const NEXT = ['renewed', 'awaiting', 'leaving', 'transferring', 'not_returning', 'moving_on', 'graduating'];
+const NEXT = ['joining', 'renewed', 'awaiting', 'leaving', 'transferring', 'not_returning', 'moving_on', 'graduating'];
 
 export default function Students() {
   const { t, L, fmtNum } = useI18n();
@@ -30,8 +30,9 @@ export default function Students() {
     <>
       <PageHead title={t('nav.students')} sub={me.school ? L(me.school) : t('bo.students.sub_all')} />
       {st.data && (
-        <div className="grid c4 mb">
-          <Stat label={t('bo.students.enrolled', { ay: st.data.current_ay })} value={fmtNum(st.data.all)} accent />
+        <div className="grid mb" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+          <Stat label={t('bo.students.enrolled', { ay: st.data.current_ay })} value={fmtNum(st.data.enrolled)} accent />
+          <Stat label={t('bo.students.next.joining')} value={fmtNum(st.data.joining)} sub={t('bo.students.for_ay', { ay: st.data.next_ay })} />
           <Stat label={t('bo.students.next.renewed')} value={fmtNum(st.data.counts.renewed || 0)} sub={t('bo.students.for_ay', { ay: st.data.next_ay })} />
           <Stat label={t('bo.students.next.awaiting')} value={<span style={{ color: 'var(--amber-700)' }}>{fmtNum(st.data.counts.awaiting || 0)}</span>} />
           <Stat label={t('bo.students.next.leaving')} value={<span style={{ color: 'var(--red-700)' }}>{fmtNum(st.data.counts.leaving || 0)}</span>} />
@@ -68,7 +69,7 @@ export default function Students() {
               columns={[
                 { key: 'name', label: t('bo.students.student'), render: (r) => <><b>{L(r, 'full_name')}</b>{r.sod ? <> <span className="badge blue">{t('bo.students.sod')}</span></> : null}</> },
                 { key: 'eid', label: t('uaepass.eid'), render: (r) => <span className="mono small nowrap">{r.emirates_id}</span> },
-                { key: 'grade', label: t('common.grade'), render: (r) => <span className="nowrap">{t(`grade.${r.grade}`)}{r.section ? ` – ${r.section}` : ''}</span> },
+                { key: 'grade', label: t('common.grade'), render: (r) => <span className="nowrap">{t(`grade.${r.grade}`)}{r.section ? ` – ${r.section}` : ''}{r.joining_ay ? <span className="small muted"> ({r.joining_ay})</span> : null}</span> },
                 ...(multiSchool ? [{ key: 'school', label: t('common.school'), render: (r) => <span className="small">{L(r, 'school')}</span> }] : []),
                 { key: 'gender', label: t('common.gender'), render: (r) => <span className="small">{t(r.gender === 'M' ? 'common.male' : 'common.female')}</span> },
                 { key: 'next', label: t('bo.students.next_year_ay', { ay: d.next_ay }), render: (r) => <NextBadge s={r.next_year} /> },

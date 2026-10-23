@@ -162,14 +162,29 @@ r.get('/school/students', requireRole(...DIRECTORY), wrap((req) => {
                            e.id enrolment_id, e.school_id, e.grade, e.status, e.leave_requested_at, e.leave_date, sec.name section, s.name_en school_en, s.name_ar school_ar,
                            n.status next_status, n.grade next_grade, n.school_id next_school_id
                       ${STUDENT_FROM} WHERE ${w.join(' AND ')}`, ...p)
-    .map((r) => ({ ...r, next_year: nextYearStatus(r) }))
+    .map((r) => ({ ...r, next_year: nextYearStatus(r) }));
+  // Students joining next year: accepted at the school for next year without being enrolled there this year
+  // (new registrations and transfers in). Their grade and section are next year's.
+  const wj = ['n.ay = ?', `n.status = 'enrolled'`, `NOT EXISTS (SELECT 1 FROM enrolments x WHERE x.child_id = n.child_id AND x.ay = ? AND x.school_id = n.school_id AND x.status IN ('enrolled','leaving'))`], pj = [next, cur];
+  if (SCHOOL.includes(req.user.role)) { wj.push('n.school_id = ?'); pj.push(req.user.school_id); }
+  if (req.user.role === 'cluster_officer') { wj.push('s.cluster_id = ?'); pj.push(req.user.cluster_id); }
+  if (q.school) { wj.push('n.school_id = ?'); pj.push(Number(q.school)); }
+  if (q.grade) { wj.push('n.grade = ?'); pj.push(q.grade); }
+  if (q.section) { wj.push('sec.name = ?'); pj.push(q.section); }
+  if (q.q) { wj.push('(c.full_name_en LIKE ? OR c.full_name_ar LIKE ? OR c.emirates_id LIKE ?)'); pj.push(...Array(3).fill(`%${q.q.trim()}%`)); }
+  const joining = all(`SELECT c.id, c.full_name_en, c.full_name_ar, c.emirates_id, c.gender, c.nationality, c.sod, c.family_id,
+                              n.id enrolment_id, n.school_id, n.grade, n.status, n.source, sec.name section, s.name_en school_en, s.name_ar school_ar
+                         FROM enrolments n JOIN children c ON c.id = n.child_id JOIN schools s ON s.id = n.school_id LEFT JOIN sections sec ON sec.id = n.section_id
+                        WHERE ${wj.join(' AND ')}`, ...pj).map((r) => ({ ...r, next_year: 'joining', joining_ay: next }));
+  rows.push(...joining);
+  rows
     // KG1, KG2, Grade 1 … Grade 12 (not alphabetical), then section and name
     .sort((a, b) => GRADES.indexOf(a.grade) - GRADES.indexOf(b.grade) || String(a.section).localeCompare(String(b.section)) || a.full_name_en.localeCompare(b.full_name_en));
   const counts = {};
   for (const r of rows) counts[r.next_year] = (counts[r.next_year] || 0) + 1;
   const filtered = q.next ? rows.filter((r) => r.next_year === q.next) : rows;
   const limit = 300;
-  return { total: filtered.length, all: rows.length, counts, rows: filtered.slice(0, limit), limited: filtered.length > limit, current_ay: cur, next_ay: next };
+  return { total: filtered.length, all: rows.length, enrolled: rows.length - joining.length, joining: joining.length, counts, rows: filtered.slice(0, limit), limited: filtered.length > limit, current_ay: cur, next_ay: next };
 }));
 
 r.get('/school/students/:childId', requireRole(...DIRECTORY), wrap((req) => {
@@ -194,7 +209,9 @@ r.get('/school/students/:childId', requireRole(...DIRECTORY), wrap((req) => {
   const siblings = child.family_id ? all(`SELECT c.id, c.full_name_en, c.full_name_ar, e.grade, s.name_en school_en, s.name_ar school_ar FROM children c
       LEFT JOIN enrolments e ON e.child_id = c.id AND e.ay = ? AND e.status IN ('enrolled','leaving') LEFT JOIN schools s ON s.id = e.school_id
       WHERE c.family_id = ? AND c.id != ?`, cur, child.family_id, id) : [];
-  const next_year = current ? nextYearStatus({ ...current, next_status: nextE?.status, next_school_id: nextE?.school_id }) : null;
+  let next_year = current ? nextYearStatus({ ...current, next_status: nextE?.status, next_school_id: nextE?.school_id }) : nextE?.status === 'enrolled' ? 'joining' : null;
+  // for the receiving school, a transfer in is a student joining next year
+  if (SCHOOL.includes(u.role) && nextE?.status === 'enrolled' && nextE.school_id === u.school_id && current?.school_id !== u.school_id) next_year = 'joining';
   return {
     child, current, next: nextE, next_year, family, guardians, siblings, current_ay: cur, next_ay: next,
     history: enrolments, applications: apps.map(({ preferences, ...a }) => a),

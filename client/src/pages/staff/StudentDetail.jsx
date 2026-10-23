@@ -51,7 +51,7 @@ export default function StudentDetail() {
                     [t('common.status'), <StatusBadge status={cur.status} />],
                     cur.start_date && [t('bo.students.start'), fmtDate(cur.start_date)],
                   ]} />
-                ) : <p className="muted small">{t('bo.students.no_current')}</p>}
+                ) : <p className="muted small">{t(d.next_year === 'joining' ? 'bo.students.no_current_joining' : 'bo.students.no_current', { ay: d.next_ay })}</p>}
               </Card>
 
               <Card title={t('bo.students.next_card', { ay: d.next_ay })}>
