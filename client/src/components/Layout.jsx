@@ -62,7 +62,7 @@ export default function Layout({ children, bare }) {
     <>
       <div className="topbar">
         <div className="inner">
-          <span>{t('app.gov')}</span>
+          <span className="gov">{t('app.gov')}</span>
           <span className="demo">
             {t('app.poc_banner')}
             {lookups?.clock_offset_days ? ` · ${t('app.demo_clock', { days: lookups.clock_offset_days, date: lookups.today })}` : ''}
@@ -90,7 +90,7 @@ export default function Layout({ children, bare }) {
                   <b>{L(me)}</b>
                   <small>{t(`role.${me.role}`)}{me.school ? ` · ${L(me.school)}` : ''}{me.force_registration ? ` · ${t('role.force')}` : ''}</small>
                 </div>
-                <button className="btn secondary sm" onClick={async () => { await signOut(); nav('/'); }}>{t('common.sign_out')}</button>
+                <button className="btn secondary sm signout-top" onClick={async () => { await signOut(); nav('/'); }}>{t('common.sign_out')}</button>
               </>
             ) : (
               loc.pathname !== '/' && <Link to="/" className="btn sm">{t('common.sign_in')}</Link>
@@ -106,6 +106,11 @@ export default function Layout({ children, bare }) {
                 ? <div key={i} className="group">{t(key)}</div>
                 : <NavLink key={path} to={path} end={path === '/parent' || path === '/insights'}>{t(key)}{path === '/inbox' && me.unread ? <span className="count">{me.unread}</span> : null}</NavLink>
             )}
+            {/* phones: who is signed in and Sign out live at the end of the menu */}
+            <div className="nav-account" onClick={(e) => e.stopPropagation()}>
+              <div className="small"><b>{L(me)}</b><br /><span className="muted">{t(`role.${me.role}`)}{me.school ? ` · ${L(me.school)}` : ''}</span></div>
+              <button className="btn secondary sm" onClick={async () => { setOpen(false); await signOut(); nav('/'); }}>{t('common.sign_out')}</button>
+            </div>
           </nav>
         )}
         <main className="content">{children}</main>

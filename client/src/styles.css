@@ -88,16 +88,32 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1.2rem 0; }
 .sidenav a.active { background: var(--gold-100); color: var(--gold-800); font-weight: 600; }
 .sidenav .count { margin-inline-start: auto; background: var(--red-600); color: #fff; border-radius: 999px; font-size: .7rem; padding: 0 7px; }
 main.content { padding: 24px 28px 60px; min-width: 0; }
-.menu-btn { display: none; }
+.header .menu-btn { display: none; } /* more specific than .btn, which would otherwise show it */
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .sidenav { display: none; position: fixed; inset: 64px 0 0 0; z-index: 900; overflow: auto; }
   .sidenav.open { display: block; }
-  .menu-btn { display: inline-flex; }
+  .header .menu-btn { display: inline-flex; }
   main.content { padding: 16px; }
   .userchip { display: none; }
   .brand .names span { display: none; }
+  /* header: brand shrinks with an ellipsis, Sign out moves into the menu */
+  .topbar .inner { padding: 3px 12px; }
+  .topbar .gov { display: none; }
+  .header .inner { padding: 8px 12px; gap: 8px; }
+  .brand { flex: 1; min-width: 0; gap: 8px; }
+  .brand .mark { width: 36px; height: 36px; font-size: .8rem; flex: none; }
+  .brand .names { min-width: 0; }
+  .brand .names b { font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header .spacer { display: none; }
+  .header .actions { gap: 4px; flex: none; }
+  .header .signout-top { display: none; }
 }
+.sidenav .nav-account { display: none; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); margin-top: 14px; padding: 12px 10px 0; }
+@media (max-width: 900px) { .sidenav .nav-account { display: flex; } }
+/* grid and flex children may shrink below their content width (charts and tables scroll inside instead) */
+.grid > *, .card { min-width: 0; }
+.kv dd { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- building blocks ---------- */
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -168,6 +184,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: .88rem; }
 .badge.amber { background: var(--amber-50); color: var(--amber-700); border-color: var(--amber-100); }
 .badge.blue { background: var(--blue-50); color: var(--blue-700); border-color: var(--blue-100); }
 .badge.dark { background: var(--black-800); color: #fff; border-color: var(--black-800); }
+.badge.wrap { white-space: normal; max-width: 100%; } /* long badges (e.g. sibling details) may wrap */
 
 .alert { border-radius: var(--radius); padding: 12px 14px; border: 1px solid; display: flex; gap: 10px; align-items: flex-start; }
 .alert.info { background: var(--blue-50); border-color: var(--blue-100); color: var(--blue-700); }

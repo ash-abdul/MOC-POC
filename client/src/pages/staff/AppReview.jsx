@@ -131,7 +131,7 @@ export default function AppReview() {
                   {d.siblings.length > 0 && (
                     <>
                       <h4 className="mt">{t('bo.review.siblings')}</h4>
-                      <div className="row">{d.siblings.map((s) => <span key={s.id} className={`badge ${s.school_id === a.current_school_id ? 'blue' : ''}`}>{L(s, 'full_name')}{s.grade ? ` · ${t(`grade.${s.grade}`)} · ${L(s, 'school')}` : ''}</span>)}</div>
+                      <div className="row">{d.siblings.map((s) => <span key={s.id} className={`badge wrap ${s.school_id === a.current_school_id ? 'blue' : ''}`}>{L(s, 'full_name')}{s.grade ? ` · ${t(`grade.${s.grade}`)} · ${L(s, 'school')}` : ''}</span>)}</div>
                     </>
                   )}
                 </Card>
