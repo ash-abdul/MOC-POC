@@ -3,6 +3,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { open, DB_PATH } from './db/index.js';
 import { AppError } from './services/core.js';
 import { runJobs } from './services/applications.js';
@@ -12,14 +13,19 @@ import parent from './routes/parent.js';
 import staff from './routes/staff.js';
 import admin from './routes/admin.js';
 import { reports, transportRouter, notifications, lookups, mock } from './routes/misc.js';
+import { accessGate } from './gate.js';
 
+const here = path.dirname(fileURLToPath(import.meta.url));
 if (!fs.existsSync(DB_PATH)) {
-  console.error('Database not found – run "npm run seed" first.');
-  process.exit(1);
+  // first start on a fresh host: create the synthetic test data
+  console.log('No database found – creating the synthetic test data…');
+  execFileSync(process.execPath, ['--no-warnings', path.join(here, 'seed/seed.js')], { stdio: 'inherit' });
 }
 open();
 
 const app = express();
+app.set('trust proxy', 1); // behind the host's HTTPS proxy (Render, Cloudflare…)
+app.use(accessGate()); // only active when PORTAL_PASSWORD is set
 app.use(express.json({ limit: '5mb' }));
 app.use(authenticate);
 app.use('/api', readOnlyViewer);
@@ -36,7 +42,7 @@ app.use('/api', staff);
 app.use('/api', (_req, _res, next) => next(new AppError(404, 'not_found')));
 
 // built client (npm run build) – single-port local deployment
-const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../client/dist');
+const dist = path.resolve(here, '../client/dist');
 if (fs.existsSync(dist)) {
   app.use(express.static(dist));
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));

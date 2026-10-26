@@ -12,6 +12,20 @@ and opens http://localhost:3000 in your browser. Close the window or press `Ctrl
 - `./start.command --reset` – reset the data to the starting synthetic data first
 - `PORT=3001 ./start.command` – use another port
 
+## Deploy on Render (free)
+
+The repository includes a Render blueprint (`render.yaml`).
+
+1. Sign in at https://render.com with GitHub and allow Render to read this repository.
+2. **New → Blueprint**, pick this repository, and enter a **PORTAL_PASSWORD** when asked.
+3. Render builds the portal (installs packages, creates the synthetic data, builds the web app) and
+   publishes it at an address like `https://moe-registration-poc.onrender.com`.
+
+Visitors first see an access page asking for that password (the site is also hidden from search engines).
+Free-plan behaviour: the service sleeps after 15 minutes without visitors (about a minute to wake up), and
+any change made in the portal is lost when it restarts – it always comes back with the starting test data.
+Pushing to `main` redeploys automatically; a redeploy also refreshes the test data's dates.
+
 ## Run (manual)
 
 Requires Node.js 22.13 or later (uses the built-in `node:sqlite` driver).

@@ -22,6 +22,8 @@ async function request(method, url, body) {
   });
   const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
   if (!res.ok) {
+    // hosted demo: the access password expired – reload to show the access page
+    if (res.status === 401 && data?.error === 'access_required') window.location.reload();
     if (res.status === 401 && getToken()) {
       setToken(null);
       window.dispatchEvent(new Event('moe:logout'));

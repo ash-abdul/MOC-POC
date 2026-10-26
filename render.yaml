@@ -1,0 +1,18 @@
+# Render blueprint – free web service for the PoC demo (see README → "Deploy on Render").
+# The free plan sleeps after 15 minutes without visitors and does not keep files between restarts:
+# every start begins from the synthetic test data created during the build.
+services:
+  - type: web
+    name: moe-registration-poc
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run seed && npm run build
+    startCommand: node --no-warnings server/index.js
+    healthCheckPath: /healthz
+    envVars:
+      # shared demo password asked for on the first visit (Render prompts for the value)
+      - key: PORTAL_PASSWORD
+        sync: false
