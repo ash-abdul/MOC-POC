@@ -1,0 +1,48 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 972 >>
+stream
+q 0.88 g BT /F2 40 Tf 0.766 0.643 -0.643 0.766 85 230 Tm (SYNTHETIC TEST DOCUMENT) Tj ET Q
+q 0.88 g BT /F2 26 Tf 0.766 0.643 -0.643 0.766 140 180 Tm (NOT VALID - NO REAL PERSON) Tj ET Q
+q 0.71 0.54 0.21 rg 40 760 515 46 re f Q
+BT 1 g /F2 17 Tf 52 786 Td (Emirates ID - SAMPLE) Tj ET
+BT 1 g /F1 10 Tf 52 769 Td (Guardian identity card \(synthetic test copy\)) Tj ET
+BT 0.37 g /F1 10.5 Tf 52 725 Td (Holder) Tj ET
+BT 0.1 g /F2 10.5 Tf 220 725 Td (Test guardian \(any test parent\)) Tj ET
+BT 0.37 g /F1 10.5 Tf 52 705 Td (ID number) Tj ET
+BT 0.1 g /F2 10.5 Tf 220 705 Td (Use the signed-in parent's ID) Tj ET
+BT 0.37 g /F1 10.5 Tf 52 685 Td (Card expiry) Tj ET
+BT 0.1 g /F2 10.5 Tf 220 685 Td (31 Dec 2029) Tj ET
+BT 0.37 g /F1 9 Tf 52 655 Td (Upload for each guardian; the portal does not read the content of test files.) Tj ET
+BT 0.5 g /F1 8 Tf 52 40 Td (Generated for the MoE School Registration Portal proof of concept. Synthetic data - not issued by any authority.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000001274 00000 n 
+0000001344 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1419
+%%EOF

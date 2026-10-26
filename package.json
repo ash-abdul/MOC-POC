@@ -11,7 +11,8 @@
     "dev": "concurrently -n api,web -c yellow,cyan \"npm:server\" \"npm:client\"",
     "build": "vite build --config client/vite.config.js",
     "start": "node --no-warnings server/index.js",
-    "setup": "npm install && npm run seed && npm run build"
+    "setup": "npm install && npm run seed && npm run build",
+    "test-docs": "node scripts/make-test-documents.mjs"
   },
   "engines": {
     "node": ">=22.13"
